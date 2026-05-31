@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>04 // the kernel narrates itself</title>
+<meta name="description" content="Make a running kernel function report itself with dynamic tracing — no rebuild. The payoff of the apprentice arc.">
+<!-- IBM Plex Mono self-hosted via @font-face in crt.css -->
+<link rel="stylesheet" href="../assets/crt.css">
+</head>
+<body>
+<div class="app">
+
+  <header class="statusline">
+    <span class="live"><span class="prefix">&gt;</span> lesson 04 // the kernel narrates itself<span class="cursor" aria-hidden="true"></span></span>
+    <span class="meta">[ no rebuild &middot; live kernel ]</span>
+  </header>
+
+  <nav class="rail" aria-label="Sections">
+    <span class="label">./lesson 04</span>
+    <nav>
+      <a class="navlink" href="#mystery" aria-current="true">the mystery</a>
+      <a class="navlink" href="#observe">observe</a>
+      <a class="navlink" href="#read">read</a>
+      <a class="navlink" href="#touch">touch</a>
+      <a class="navlink" href="#verify">verify</a>
+      <a class="navlink" href="#explore">exploration</a>
+      <a class="navlink" href="#further">further reading</a>
+    </nav>
+    <span class="label" style="margin-top:var(--space-lg)">./source</span>
+    <nav>
+      <a class="navlink" href="../index.html">&larr; command index</a>
+      <a class="navlink" href="README.md">README.md</a>
+      <a class="navlink" href="trigger.c">trigger.c</a>
+      <a class="navlink" href="check.sh">check.sh</a>
+    </nav>
+  </nav>
+
+  <main class="workspace">
+
+    <section class="panel panel--hero" id="mystery">
+      <h1><span class="prefix">$</span> 04 ./the-kernel-narrates-itself</h1>
+      <p class="tagline">make a live function speak &middot; no rebuild</p>
+      <p>In lesson 01 you added a <code>printk</code> and <strong>rebuilt</strong> to make
+        <code>getpid</code> speak. Here you make the <em>same</em> function speak on an
+        <strong>already-running</strong> kernel, in milliseconds, with <strong>no rebuild at
+        all</strong>. That's the dynamic-tracing superpower — how you debug a box you can't
+        recompile.</p>
+      <p class="muted">Every function has an <code>fentry</code> hook (that's <strong>ftrace</strong>),
+        and you can drop a breakpoint on almost any instruction (that's a <strong>kprobe</strong>) —
+        all at runtime. The instrumentation is already in the kernel you booted.</p>
+      <div class="callout" style="margin-top:var(--space-md)">
+        <strong>Working in the workbench.</strong> No module, no kernel edit — you drive the
+        kernel's built-in tracing from userspace (<code>echo</code>/<code>cat</code> into
+        <code>tracefs</code>).
+      </div>
+    </section>
+
+    <section class="panel" id="observe">
+      <div class="panel__head"><span class="panel__id">[01]</span><h2><span class="prefix">./</span>OBSERVE &mdash; the function tracer narrates</h2></div>
+      <p><code>tracefs</code> lives at <code>/sys/kernel/tracing</code>. Narrow the function
+        tracer to one function and watch the kernel report it:</p>
+<pre class="code" data-lang="sh"><code>cd /sys/kernel/tracing
+echo __do_sys_getpid &gt; set_ftrace_filter   <span class="cm"># only narrate this function</span>
+echo function       &gt; current_tracer
+echo 1 &gt; tracing_on ; ./trigger ; echo 0 &gt; tracing_on
+cat trace                                    <span class="cm"># -&gt; __do_sys_getpid &lt;-do_syscall_64</span></code></pre>
+    </section>
+
+    <section class="panel" id="read">
+      <div class="panel__head"><span class="panel__id">[02]</span><h2><span class="prefix">./</span>READ &mdash; how it can do that</h2></div>
+      <ul>
+        <li><strong>ftrace</strong> uses a <code>call __fentry__</code> the compiler planted at the
+          start of every function (<code>-pg</code>); at runtime the kernel patches those sites to
+          jump into the tracer. (That's the <code>ftrace: allocating … entries</code> line at boot.)</li>
+        <li><strong>kprobes</strong> replace an instruction <em>anywhere</em> with a breakpoint, run
+          your handler, then single-step the original. <code>kprobe_events</code> exposes this through
+          <code>tracefs</code>, so one <code>echo</code> registers a probe.</li>
+      </ul>
+      <p class="muted">Neither needs the source or a compiler — view two. (<code>SYSCALL_DEFINE0(getpid)</code>
+        from lesson 01 compiles to <code>__do_sys_getpid</code>, the body we trace; the x86 entry
+        <code>__x64_sys_getpid</code> just calls it.)</p>
+    </section>
+
+    <section class="panel" id="touch">
+      <div class="panel__head"><span class="panel__id">[03]</span><h2><span class="prefix">./</span>TOUCH &mdash; attach a kprobe, live</h2></div>
+      <div class="term"><div class="line cmd">make check LESSON=04-kernel-narrates-itself</div></div>
+      <p style="margin-top:var(--space-md)">The guest registers a kprobe on the lesson-01 handler
+        and fires it:</p>
+<pre class="code" data-lang="sh"><code>cd /sys/kernel/tracing
+echo 'p:ka_getpid __do_sys_getpid' &gt; kprobe_events   <span class="cm"># define the probe — no rebuild</span>
+echo 1 &gt; events/kprobes/ka_getpid/enable
+echo 1 &gt; tracing_on ; ./trigger ; echo 0 &gt; tracing_on
+cat trace                                              <span class="cm"># -&gt; ka_getpid: (__do_sys_getpid+0x0/…)</span></code></pre>
+      <p class="muted" style="margin-top:var(--space-md)">Compare the effort to lesson 01: there you
+        edited C and waited for a kernel build; here you instrumented the running kernel in one line.</p>
+    </section>
+
+    <section class="panel" id="verify">
+      <div class="panel__head"><span class="panel__id">[04]</span><h2><span class="prefix">$</span> VERIFY</h2></div>
+      <p>Green when the serial log contains:</p>
+      <ul>
+        <li><code>ka_getpid:</code> — a kprobe you attached to the <strong>live</strong> kernel fired on the getpid handler <span class="badge badge--ok">NO REBUILD</span></li>
+      </ul>
+      <p class="muted">The function-tracer view (<code>__do_sys_getpid &lt;-do_syscall_64</code>) is shown too, as a bonus.</p>
+    </section>
+
+    <section class="panel panel--warn" id="explore">
+      <div class="panel__head"><span class="panel__id">[05]</span><h2><span class="prefix">./</span>EXPLORATION &mdash; drive it yourself</h2></div>
+      <p><strong>Capture an argument.</strong> <code>kprobe_events</code> can record values — e.g. a
+        probe on <code>do_sys_openat2</code> that grabs the filename. The syntax is in
+        <em>Further reading</em>.</p>
+      <p class="muted"><strong>The friendly frontend.</strong> <code>bpftrace</code> (installed in the
+        workbench) is a one-liner wrapper over exactly this machinery. <strong>And the big question:</strong>
+        when is dropping a <code>printk</code> (lesson 01) the wrong tool and a kprobe the right one?
+        (Hint: production, no source, can't reboot.)</p>
+    </section>
+
+    <section class="panel" id="further">
+      <div class="panel__head"><span class="panel__id">[06]</span><h2><span class="prefix">./</span>FURTHER READING</h2></div>
+      <p class="muted">Canonical references to explore deeper — each opens in a new tab.</p>
+      <ul>
+        <li><a class="ext" href="https://docs.kernel.org/trace/ftrace.html" target="_blank" rel="noopener noreferrer">docs.kernel.org — ftrace, the Function Tracer</a> — the <code>tracefs</code> interface and every tracer it offers.</li>
+        <li><a class="ext" href="https://docs.kernel.org/trace/kprobetrace.html" target="_blank" rel="noopener noreferrer">docs.kernel.org — Kprobe-based Event Tracing</a> — the <code>kprobe_events</code> syntax you used, including capturing arguments.</li>
+        <li><a class="ext" href="https://docs.kernel.org/trace/kprobes.html" target="_blank" rel="noopener noreferrer">docs.kernel.org — Kernel Probes (Kprobes)</a> — how kprobes work underneath.</li>
+      </ul>
+    </section>
+
+  </main>
+
+  <aside class="diagnostics" aria-label="Lesson diagnostics">
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">./</span>diagnostics</h2></div>
+      <div class="kv"><span class="k">lesson</span><span class="v">04</span></div>
+      <div class="kv"><span class="k">arc</span><span class="v">apprentice (finale)</span></div>
+      <div class="kv"><span class="k">state</span><span class="v"><span class="badge badge--info">READY</span></span></div>
+      <div class="kv"><span class="k">surface</span><span class="v">ftrace &middot; kprobes</span></div>
+      <div class="kv"><span class="k">loop</span><span class="v">echo &rarr; tracefs (no rebuild)</span></div>
+    </section>
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">&gt;</span> pass marker</h2></div>
+      <div class="kv"><span class="k">kprobe</span><span class="v">ka_getpid:</span></div>
+    </section>
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">$</span> next</h2></div>
+      <div class="stack">
+        <a class="btn" href="../wheel/works-on-my-laptop/index.html">WHEEL &rarr;</a>
+        <a class="btn btn--dim" href="../03-proc-is-code/index.html">&larr; LESSON 03</a>
+      </div>
+    </section>
+  </aside>
+
+</div>
+</body>
+</html>

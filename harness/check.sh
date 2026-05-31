@@ -15,6 +15,8 @@ assert_in_container
 LESSONS=(
   01-syscall-is-the-door
   02-printk-and-ring-buffer
+  03-proc-is-code
+  04-kernel-narrates-itself
   wheel/works-on-my-laptop
 )
 

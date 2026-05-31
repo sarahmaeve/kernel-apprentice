@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>03 // /proc is code, not files</title>
+<meta name="description" content="Build a /proc entry by hand from a seq_file handler and watch it generate text live.">
+<!-- IBM Plex Mono self-hosted via @font-face in crt.css -->
+<link rel="stylesheet" href="../assets/crt.css">
+</head>
+<body>
+<div class="app">
+
+  <header class="statusline">
+    <span class="live"><span class="prefix">&gt;</span> lesson 03 // /proc is code, not files<span class="cursor" aria-hidden="true"></span></span>
+    <span class="meta">[ observe &middot; read &middot; touch ]</span>
+  </header>
+
+  <nav class="rail" aria-label="Sections">
+    <span class="label">./lesson 03</span>
+    <nav>
+      <a class="navlink" href="#mystery" aria-current="true">the mystery</a>
+      <a class="navlink" href="#observe">observe</a>
+      <a class="navlink" href="#read">read</a>
+      <a class="navlink" href="#touch">touch</a>
+      <a class="navlink" href="#verify">verify</a>
+      <a class="navlink" href="#explore">exploration</a>
+      <a class="navlink" href="#further">further reading</a>
+    </nav>
+    <span class="label" style="margin-top:var(--space-lg)">./source</span>
+    <nav>
+      <a class="navlink" href="../index.html">&larr; command index</a>
+      <a class="navlink" href="README.md">README.md</a>
+      <a class="navlink" href="module/proc_window.c">module/proc_window.c</a>
+      <a class="navlink" href="check.sh">check.sh</a>
+    </nav>
+  </nav>
+
+  <main class="workspace">
+
+    <section class="panel panel--hero" id="mystery">
+      <h1><span class="prefix">$</span> 03 ./proc-is-code-not-files</h1>
+      <p class="tagline">the kernel wearing a filesystem costume</p>
+      <p><code>cat /proc/self/status</code> prints memory, state, limits — but no file on
+        any disk holds that. <code>/proc</code> is a <strong>virtual</strong> filesystem: each
+        read calls into kernel code that fabricates the answer right then, so ordinary tools
+        (<code>cat</code>, <code>grep</code>) can read kernel state.</p>
+      <p class="muted">You'll <strong>build a <code>/proc</code> entry yourself</strong> and prove
+        it's code: read it twice and watch the numbers change.</p>
+      <div class="callout" style="margin-top:var(--space-md)">
+        <strong>Working in the workbench.</strong> This lesson builds a module from source in
+        the repo (host-editable) and runs <code>make check</code> — no kernel edit needed.
+      </div>
+    </section>
+
+    <section class="panel" id="observe">
+      <div class="panel__head"><span class="panel__id">[01]</span><h2><span class="prefix">./</span>OBSERVE &mdash; the tool shows it</h2></div>
+      <p>Read a couple of virtual files twice in a row — the values move because they're
+        computed at read time, not stored:</p>
+<pre class="code" data-lang="sh"><code>cat /proc/uptime ; sleep 1 ; cat /proc/uptime   <span class="cm"># the numbers advance</span>
+cat /proc/self/status | head                      <span class="cm"># live state for THIS process</span></code></pre>
+    </section>
+
+    <section class="panel" id="read">
+      <div class="panel__head"><span class="panel__id">[02]</span><h2><span class="prefix">./</span>READ &mdash; the code explains it</h2></div>
+      <p><code>module/proc_window.c</code> is a complete module. Its heart is one function:</p>
+<pre class="code" data-lang="c"><code>static int ka_show(struct seq_file *m, void *v)
+{
+        seq_printf(m, "kernel-apprentice: hello from a seq_file handler\n");
+        seq_printf(m, "reading process: %s (pid %d)\n",
+                   current->comm, task_tgid_vnr(current));
+        seq_printf(m, "jiffies now:     %lu\n", jiffies);
+        return 0;
+}</code></pre>
+      <p class="muted"><code>ka_show</code> writes the "file contents" with <code>seq_printf</code>
+        every time it's read; the <strong>seq_file</strong> interface handles buffering and
+        seeking. <code>proc_create("kernel-apprentice", 0444, NULL, &amp;ka_proc_ops)</code> hangs
+        that handler off a name under <code>/proc</code> — view two.</p>
+    </section>
+
+    <section class="panel" id="touch">
+      <div class="panel__head"><span class="panel__id">[03]</span><h2><span class="prefix">./</span>TOUCH &mdash; build the window, look through it</h2></div>
+      <div class="term"><div class="line cmd">make check LESSON=03-proc-is-code</div></div>
+      <p style="margin-top:var(--space-md)">The harness builds <code>proc_window.ko</code>, boots
+        a guest, then the guest's <code>/init</code>:</p>
+<pre class="code" data-lang="sh"><code>insmod /proc_window.ko          <span class="cm"># ka_init -&gt; /proc/kernel-apprentice appears</span>
+cat /proc/kernel-apprentice     <span class="cm"># your ka_show() runs and produces this text</span>
+cat /proc/kernel-apprentice     <span class="cm"># read again — jiffies advanced (it's code!)</span>
+rmmod proc_window               <span class="cm"># ka_exit -&gt; the entry is gone</span></code></pre>
+    </section>
+
+    <section class="panel" id="verify">
+      <div class="panel__head"><span class="panel__id">[04]</span><h2><span class="prefix">$</span> VERIFY</h2></div>
+      <p>Green when the serial log contains <em>both</em>:</p>
+      <ul>
+        <li><code>kernel-apprentice: hello from a seq_file handler</code> — your handler produced output <span class="badge badge--ok">READ</span></li>
+        <li><code>kernel-apprentice: /proc/kernel-apprentice created</code> — the module created the entry <span class="badge badge--ok">CREATE</span></li>
+      </ul>
+    </section>
+
+    <section class="panel panel--warn" id="explore">
+      <div class="panel__head"><span class="panel__id">[05]</span><h2><span class="prefix">./</span>EXPLORATION &mdash; drive it yourself</h2></div>
+      <p><strong>Prove it's code.</strong> The check reads the entry twice — compare the two
+        <code>jiffies</code> values in the log. A real file wouldn't change between reads.</p>
+      <p class="muted"><strong>Add a field.</strong> In <code>make shell</code>, edit
+        <code>module/proc_window.c</code> to <code>seq_printf</code> one more line (e.g.
+        <code>num_online_cpus()</code>), rebuild, reload, read it back. <strong>Then look
+        around:</strong> <code>/proc/version</code>, <code>/proc/meminfo</code> — each is a
+        <code>*_show</code> function somewhere in the tree.</p>
+    </section>
+
+    <section class="panel" id="further">
+      <div class="panel__head"><span class="panel__id">[06]</span><h2><span class="prefix">./</span>FURTHER READING</h2></div>
+      <p class="muted">Canonical references to explore deeper — each opens in a new tab.</p>
+      <ul>
+        <li><a class="ext" href="https://docs.kernel.org/filesystems/seq_file.html" target="_blank" rel="noopener noreferrer">docs.kernel.org — The seq_file Interface</a> — the buffering/iterator API behind <code>ka_show</code>.</li>
+        <li><a class="ext" href="https://docs.kernel.org/filesystems/proc.html" target="_blank" rel="noopener noreferrer">docs.kernel.org — The /proc Filesystem</a> — what <code>/proc</code> is and the conventions its files follow.</li>
+      </ul>
+    </section>
+
+  </main>
+
+  <aside class="diagnostics" aria-label="Lesson diagnostics">
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">./</span>diagnostics</h2></div>
+      <div class="kv"><span class="k">lesson</span><span class="v">03</span></div>
+      <div class="kv"><span class="k">arc</span><span class="v">apprentice</span></div>
+      <div class="kv"><span class="k">state</span><span class="v"><span class="badge badge--info">READY</span></span></div>
+      <div class="kv"><span class="k">builds</span><span class="v">out-of-tree .ko</span></div>
+      <div class="kv"><span class="k">surface</span><span class="v">/proc &middot; seq_file</span></div>
+    </section>
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">&gt;</span> pass markers</h2></div>
+      <div class="kv"><span class="k">read</span><span class="v">hello from a seq_file…</span></div>
+      <div class="kv"><span class="k">create</span><span class="v">/proc/…-apprentice created</span></div>
+    </section>
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">$</span> next</h2></div>
+      <div class="stack">
+        <a class="btn" href="../04-kernel-narrates-itself/index.html">LESSON 04 &rarr;</a>
+        <a class="btn btn--dim" href="../02-printk-and-ring-buffer/index.html">&larr; LESSON 02</a>
+      </div>
+    </section>
+  </aside>
+
+</div>
+</body>
+</html>
