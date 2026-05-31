@@ -41,7 +41,7 @@ RUN    := $(RUNTIME) run --rm    --platform=$(PLATFORM) $(KVM) $(MOUNTS) $(IMAGE
 
 LESSON ?=
 .DEFAULT_GOAL := help
-.PHONY: help up down doctor image shell kernel initramfs check status validate clean distclean
+.PHONY: help up down doctor image shell kernel initramfs check status validate reset clean distclean
 
 help: ## Show available targets
 	@awk 'BEGIN{FS=":.*##"} /^[a-zA-Z_-]+:.*##/ {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -79,6 +79,9 @@ status: image ## Regenerate the dashboard's live status (assets/status.js, gitig
 
 validate: ## Validate the HTML docs (tag balance, links, css vars, fonts); host-only, no container
 	python3 harness/validate-html.py
+
+reset: ## Reset CHALLENGE lessons to their committed skeleton (lightweight). LESSON=<id> for one.
+	./harness/reset.sh $(LESSON)
 
 clean: ## Remove the kernel build (named volume) + host artifacts; keeps the download cache
 	-$(RUNTIME) volume rm $(VOLUME) 2>/dev/null

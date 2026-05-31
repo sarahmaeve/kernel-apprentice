@@ -17,6 +17,8 @@ LESSONS=(
   02-printk-and-ring-buffer
   03-proc-is-code
   04-kernel-narrates-itself
+  H1-gdb-the-live-kernel
+  06-instrument-it-yourself
   wheel/works-on-my-laptop
 )
 

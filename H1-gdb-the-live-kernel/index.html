@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>H1 // step through the live kernel with gdb</title>
+<meta name="description" content="Break into the running kernel with gdb via QEMU's gdbstub — no rebuild. The interactive-debugging differentiator.">
+<!-- IBM Plex Mono self-hosted via @font-face in crt.css -->
+<link rel="stylesheet" href="../assets/crt.css">
+</head>
+<body>
+<div class="app">
+
+  <header class="statusline">
+    <span class="live"><span class="prefix">&gt;</span> lesson H1 // step through the live kernel with gdb<span class="cursor" aria-hidden="true"></span></span>
+    <span class="meta">[ interactive &middot; no rebuild ]</span>
+  </header>
+
+  <nav class="rail" aria-label="Sections">
+    <span class="label">./lesson H1</span>
+    <nav>
+      <a class="navlink" href="#mystery" aria-current="true">the trick</a>
+      <a class="navlink" href="#touch">touch</a>
+      <a class="navlink" href="#diy">do it yourself</a>
+      <a class="navlink" href="#why">why it matters</a>
+      <a class="navlink" href="#further">further reading</a>
+    </nav>
+    <span class="label" style="margin-top:var(--space-lg)">./source</span>
+    <nav>
+      <a class="navlink" href="../index.html">&larr; command index</a>
+      <a class="navlink" href="README.md">README.md</a>
+      <a class="navlink" href="trigger.c">trigger.c</a>
+      <a class="navlink" href="check.sh">check.sh</a>
+    </nav>
+  </nav>
+
+  <main class="workspace">
+
+    <section class="panel panel--hero" id="mystery">
+      <h1><span class="prefix">$</span> H1 ./step-the-live-kernel</h1>
+      <p class="tagline">stop time inside the kernel &middot; no rebuild</p>
+      <p>Lesson 04 let you <em>watch</em> a function run. Here you <strong>stop time inside the
+        kernel</strong>: break on the very <code>getpid</code> handler from lesson 01, and when the
+        running kernel hits it, freeze — inspect the stack, registers, the next instructions — then
+        let it go.</p>
+      <p class="muted"><strong>QEMU is already a debugger.</strong> It exposes a <strong>gdb
+        stub</strong>: launch with <code>-gdb tcp::1234</code> + <code>-S</code> (start frozen), point
+        <code>gdb vmlinux</code> at it, and you debug the kernel like any program. (Boot with
+        <code>nokaslr</code> so symbols line up.) The thing courses set up laboriously with kgdb, we
+        get almost for free.</p>
+      <div class="callout" style="margin-top:var(--space-md)">
+        <strong>Working in the workbench.</strong> No module, no kernel edit — you attach
+        <code>gdb</code> to the running guest.
+      </div>
+    </section>
+
+    <section class="panel" id="touch">
+      <div class="panel__head"><span class="panel__id">[01]</span><h2><span class="prefix">./</span>TOUCH &mdash; break into the running kernel</h2></div>
+      <div class="term"><div class="line cmd">make check LESSON=H1-gdb-the-live-kernel</div></div>
+      <p style="margin-top:var(--space-md)">The harness boots the guest frozen with a stub, attaches
+        gdb, breaks on <code>__do_sys_getpid</code>, continues until a <code>getpid()</code> hits it,
+        and prints the stack:</p>
+<pre class="code" data-lang="gdb"><code>Breakpoint 1, __x64_sys_getpid ()    <span class="cm"># the getpid handler, frozen mid-call</span>
+#0  __x64_sys_getpid ()
+#1  do_syscall_64 ()                 <span class="cm"># who called it</span></code></pre>
+      <p class="muted">You break on <code>__do_sys_getpid</code> (the body lesson 04 traced), but gdb
+        labels that aliased address <code>__x64_sys_getpid</code> — same code, different name (kallsyms
+        vs ELF symbols). <strong>PASS</strong> when gdb <em>stops</em> in the getpid handler on the live
+        kernel: you froze it mid-syscall and looked around — the deepest "reach in" yet.</p>
+    </section>
+
+    <section class="panel" id="diy">
+      <div class="panel__head"><span class="panel__id">[02]</span><h2><span class="prefix">$</span> DO IT YOURSELF</h2></div>
+      <p>Two shells from <code>make shell</code> — boot frozen in one, drive in the other:</p>
+<pre class="code" data-lang="sh"><code>gdb harness/.build/linux-6.18.33/vmlinux
+(gdb) target remote :1234
+(gdb) break __do_sys_getpid
+(gdb) continue
+(gdb) backtrace          <span class="cm"># the path from userspace into the handler</span>
+(gdb) info registers
+(gdb) x/4i $pc           <span class="cm"># the instructions about to execute</span>
+(gdb) finish             <span class="cm"># run until this function returns</span>
+(gdb) continue</code></pre>
+      <p class="muted">This kernel is built without <code>CONFIG_DEBUG_INFO</code>, so gdb shows
+        function names + offsets, not source lines. Turning on debug info (with the oops/crash module)
+        upgrades every session to full source level — <code>list</code>, <code>info locals</code>,
+        <code>kernel/sys.c:NN</code>.</p>
+    </section>
+
+    <section class="panel panel--warn" id="why">
+      <div class="panel__head"><span class="panel__id">[03]</span><h2><span class="prefix">./</span>WHY THIS IS THE DIFFERENTIATOR</h2></div>
+      <p>The SUSE debugging deck spends a whole section on kgdb: a serial console,
+        <code>kgdboc=ttyS0</code>, <code>echo g &gt; /proc/sysrq-trigger</code> to break in. All real,
+        all fiddly. Because our guest is QEMU, we skip every bit of it — the gdb stub is built into the
+        emulator.</p>
+      <p class="muted">That's something a lecture or a video can't easily let you <em>do</em>. When you
+        can't recompile a box but can attach a debugger (a VM, a board with a gdb stub), this is how you
+        find out what the kernel is actually doing — the last resort that works when printk and tracing
+        aren't enough.</p>
+    </section>
+
+    <section class="panel" id="further">
+      <div class="panel__head"><span class="panel__id">[04]</span><h2><span class="prefix">./</span>FURTHER READING</h2></div>
+      <p class="muted">Canonical references to explore deeper — each opens in a new tab.</p>
+      <ul>
+        <li><a class="ext" href="https://docs.kernel.org/process/debugging/gdb-kernel-debugging.html" target="_blank" rel="noopener noreferrer">docs.kernel.org — Debugging kernel and modules via gdb</a> — the QEMU-gdbstub workflow + the <code>lx-</code> helper commands.</li>
+        <li><a class="ext" href="https://docs.kernel.org/process/debugging/kgdb.html" target="_blank" rel="noopener noreferrer">docs.kernel.org — Using kgdb, kdb and the kernel debugger internals</a> — the on-hardware version, for when there's no QEMU.</li>
+      </ul>
+    </section>
+
+  </main>
+
+  <aside class="diagnostics" aria-label="Lesson diagnostics">
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">./</span>diagnostics</h2></div>
+      <div class="kv"><span class="k">lesson</span><span class="v">H1</span></div>
+      <div class="kv"><span class="k">module</span><span class="v">interactive debugging</span></div>
+      <div class="kv"><span class="k">state</span><span class="v"><span class="badge badge--info">READY</span></span></div>
+      <div class="kv"><span class="k">surface</span><span class="v">gdb &middot; QEMU gdbstub</span></div>
+      <div class="kv"><span class="k">loop</span><span class="v">attach &middot; no rebuild</span></div>
+    </section>
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">&gt;</span> pass marker</h2></div>
+      <div class="kv"><span class="k">break hit</span><span class="v">__do_sys_getpid</span></div>
+    </section>
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">$</span> next</h2></div>
+      <div class="stack">
+        <a class="btn" href="../06-instrument-it-yourself/index.html">LESSON 06 &rarr;</a>
+        <a class="btn btn--dim" href="../04-kernel-narrates-itself/index.html">&larr; LESSON 04</a>
+      </div>
+    </section>
+  </aside>
+
+</div>
+</body>
+</html>

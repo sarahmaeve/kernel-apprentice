@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>06 // instrument it yourself</title>
+<meta name="description" content="CHALLENGE: fill in a module skeleton so a kprobe counts getpid calls and reports them via /proc.">
+<!-- IBM Plex Mono self-hosted via @font-face in crt.css -->
+<link rel="stylesheet" href="../assets/crt.css">
+</head>
+<body>
+<div class="app">
+
+  <header class="statusline">
+    <span class="live"><span class="prefix">&gt;</span> lesson 06 // instrument it yourself<span class="cursor" aria-hidden="true"></span></span>
+    <span class="meta">[ challenge &middot; you write the code ]</span>
+  </header>
+
+  <nav class="rail" aria-label="Sections">
+    <span class="label">./lesson 06</span>
+    <nav>
+      <a class="navlink" href="#spec" aria-current="true">the spec</a>
+      <a class="navlink" href="#given">what's given</a>
+      <a class="navlink" href="#touch">touch</a>
+      <a class="navlink" href="#hints">hints</a>
+      <a class="navlink" href="#further">further reading</a>
+    </nav>
+    <span class="label" style="margin-top:var(--space-lg)">./source</span>
+    <nav>
+      <a class="navlink" href="../index.html">&larr; command index</a>
+      <a class="navlink" href="README.md">README.md</a>
+      <a class="navlink" href="module/counter.c">module/counter.c</a>
+      <a class="navlink" href="check.sh">check.sh</a>
+    </nav>
+  </nav>
+
+  <main class="workspace">
+
+    <section class="panel panel--hero" id="spec">
+      <h1><span class="prefix">$</span> 06 ./instrument-it-yourself</h1>
+      <p class="tagline">you write the kernel code this time</p>
+      <p>The lessons so far handed you working code to read. Now <em>you</em> write it: a
+        module skeleton + a spec, and two functions to fill in so the kernel counts an event and
+        reports it through <code>/proc</code>. The synthesis of lesson 03 (<code>/proc</code>) and
+        lesson 04 (kprobes) — and your first taste of <strong>modification</strong>.</p>
+      <p>The spec — <code>/proc/kernel-apprentice-count</code>, on every read, prints exactly:</p>
+<pre class="code" data-lang="text"><code>getpid calls: &lt;N&gt;</code></pre>
+      <p class="muted">where <code>&lt;N&gt;</code> is the number of times <code>getpid</code> has been
+        called since the module loaded.</p>
+      <div class="callout" style="margin-top:var(--space-md)">
+        <strong>Working in the workbench.</strong> Edit <code>module/counter.c</code> in this repo
+        (host-editable), then run <code>make check</code> from the host.
+      </div>
+    </section>
+
+    <section class="panel" id="given">
+      <div class="panel__head"><span class="panel__id">[01]</span><h2><span class="prefix">./</span>WHAT'S GIVEN</h2></div>
+      <p><code>module/counter.c</code> already does the plumbing — registers a <strong>kprobe</strong>
+        on <code>__x64_sys_getpid</code>, creates the <code>/proc</code> entry (seq_file, like lesson
+        03), and keeps an <code>atomic_t ka_count</code> for you. Two functions are stubs:</p>
+<pre class="code" data-lang="c"><code>static int ka_pre_handler(struct kprobe *p, struct pt_regs *regs)
+{
+        <span class="cm">/* TODO 1: bump ka_count by one. (hint: atomic_inc) */</span>
+        return 0;
+}
+
+static int ka_show(struct seq_file *m, void *v)
+{
+        <span class="cm">/* TODO 2: print "getpid calls: N\n" with atomic_read(&amp;ka_count). */</span>
+        return 0;
+}</code></pre>
+      <p class="muted">As shipped it compiles and loads, but counts nothing and <code>/proc</code> is
+        empty — so the check is <strong>red</strong> until you implement both.</p>
+    </section>
+
+    <section class="panel" id="touch">
+      <div class="panel__head"><span class="panel__id">[02]</span><h2><span class="prefix">./</span>TOUCH</h2></div>
+      <p>Fill in the two TODOs, then:</p>
+      <div class="term"><div class="line cmd">make check LESSON=06-instrument-it-yourself</div></div>
+      <p class="muted" style="margin-top:var(--space-md)"><strong>PASS</strong> when
+        <code>/proc/kernel-apprentice-count</code> reports a <strong>non-zero</strong> count after the
+        test calls getpid 50 times. You'll have built a kernel instrument — by hand.</p>
+    </section>
+
+    <section class="panel" id="hints">
+      <div class="panel__head"><span class="panel__id">[03]</span><h2><span class="prefix">./</span>GRADUATED HINTS</h2></div>
+      <details class="hint"><summary>counting (TODO 1)</summary>
+        <div class="hint__body"><p style="margin:0">The handler fires once per getpid. Bump the
+          atomic counter: <code>atomic_inc(&amp;ka_count);</code></p></div>
+      </details>
+      <details class="hint"><summary>printing (TODO 2)</summary>
+        <div class="hint__body"><p style="margin:0"><code>seq_printf(m, "getpid calls: %d\n",
+          atomic_read(&amp;ka_count));</code></p></div>
+      </details>
+      <details class="hint"><summary>both, together</summary>
+        <div class="hint__body">
+<pre class="code" data-lang="c"><code>atomic_inc(&amp;ka_count);                                  <span class="cm">// in ka_pre_handler</span>
+seq_printf(m, "getpid calls: %d\n", atomic_read(&amp;ka_count)); <span class="cm">// in ka_show</span></code></pre></div>
+      </details>
+    </section>
+
+    <section class="panel" id="further">
+      <div class="panel__head"><span class="panel__id">[04]</span><h2><span class="prefix">./</span>FURTHER READING</h2></div>
+      <p class="muted">Canonical references to explore deeper — each opens in a new tab.</p>
+      <ul>
+        <li><a class="ext" href="https://docs.kernel.org/trace/kprobes.html" target="_blank" rel="noopener noreferrer">docs.kernel.org — Kernel Probes (Kprobes)</a> — <code>register_kprobe</code>, pre-handlers, and what you can do in one.</li>
+        <li><a class="ext" href="https://docs.kernel.org/filesystems/seq_file.html" target="_blank" rel="noopener noreferrer">docs.kernel.org — The seq_file Interface</a> — the <code>/proc</code> output mechanism behind <code>ka_show</code>.</li>
+      </ul>
+    </section>
+
+  </main>
+
+  <aside class="diagnostics" aria-label="Lesson diagnostics">
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">./</span>diagnostics</h2></div>
+      <div class="kv"><span class="k">lesson</span><span class="v">06</span></div>
+      <div class="kv"><span class="k">module</span><span class="v">modification</span></div>
+      <div class="kv"><span class="k">state</span><span class="v"><span class="badge badge--warn">CHALLENGE</span></span></div>
+      <div class="kv"><span class="k">you write</span><span class="v">kprobe handler + seq_file</span></div>
+      <div class="kv"><span class="k">builds</span><span class="v">out-of-tree .ko</span></div>
+    </section>
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">&gt;</span> pass marker</h2></div>
+      <div class="kv"><span class="k">/proc</span><span class="v">getpid calls: N (&gt;0)</span></div>
+    </section>
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">$</span> next</h2></div>
+      <div class="stack">
+        <a class="btn" href="../wheel/works-on-my-laptop/index.html">WHEEL &rarr;</a>
+        <a class="btn btn--dim" href="../H1-gdb-the-live-kernel/index.html">&larr; LESSON H1</a>
+      </div>
+    </section>
+  </aside>
+
+</div>
+</body>
+</html>
