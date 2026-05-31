@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>07 // a character device with an ioctl</title>
+<meta name="description" content="CHALLENGE: implement a misc char device's read/write/ioctl so a userspace test passes.">
+<!-- IBM Plex Mono self-hosted via @font-face in crt.css -->
+<link rel="stylesheet" href="../assets/crt.css">
+</head>
+<body>
+<div class="app">
+
+  <header class="statusline">
+    <span class="live"><span class="prefix">&gt;</span> lesson 07 // a character device with an ioctl<span class="cursor" aria-hidden="true"></span></span>
+    <span class="meta">[ challenge &middot; build the driver ]</span>
+  </header>
+
+  <nav class="rail" aria-label="Sections">
+    <span class="label">./lesson 07</span>
+    <nav>
+      <a class="navlink" href="#spec" aria-current="true">the spec</a>
+      <a class="navlink" href="#given">what's given</a>
+      <a class="navlink" href="#touch">touch</a>
+      <a class="navlink" href="#hints">hints</a>
+      <a class="navlink" href="#further">further reading</a>
+    </nav>
+    <span class="label" style="margin-top:var(--space-lg)">./source</span>
+    <nav>
+      <a class="navlink" href="../index.html">&larr; command index</a>
+      <a class="navlink" href="README.md">README.md</a>
+      <a class="navlink" href="module/ka_chardev.c">module/ka_chardev.c</a>
+      <a class="navlink" href="test.c">test.c</a>
+      <a class="navlink" href="check.sh">check.sh</a>
+    </nav>
+  </nav>
+
+  <main class="workspace">
+
+    <section class="panel panel--hero" id="spec">
+      <h1><span class="prefix">$</span> 07 ./a-character-device-with-an-ioctl</h1>
+      <p class="tagline">be the door this time</p>
+      <p>You've read the kernel, traced it, instrumented it, fixed it. Now build a piece of it:
+        a real (if tiny) <strong>character device</strong> — <code>read</code>, <code>write</code>,
+        and an <code>ioctl</code> — so a userspace test passes. The boundary from lesson 01, seen
+        from the <em>kernel</em> side.</p>
+      <p><code>module/ka_chardev.c</code> registers <code>/dev/ka-chardev</code> over a small buffer.
+        Make it behave so <code>test.c</code> passes:</p>
+      <ul>
+        <li><code>write(fd, msg, n)</code> → store <code>n</code> bytes, return <code>n</code></li>
+        <li><code>ioctl(fd, KA_GET_LEN, &amp;len)</code> → set <code>len</code> to the stored length, return 0</li>
+        <li><code>read(fd, buf, count)</code> → return the stored bytes (EOF on a second read)</li>
+      </ul>
+      <div class="callout" style="margin-top:var(--space-md)">
+        <strong>Working in the workbench.</strong> Edit <code>module/ka_chardev.c</code> in this
+        repo (host-editable), then run <code>make check</code> from the host.
+      </div>
+    </section>
+
+    <section class="panel" id="given">
+      <div class="panel__head"><span class="panel__id">[01]</span><h2><span class="prefix">./</span>WHAT'S GIVEN</h2></div>
+      <p>Registration (<code>misc_register</code>), the <code>/dev</code> node, the
+        <code>file_operations</code> table, and the buffer are done. Three handlers are stubs:</p>
+<pre class="code" data-lang="c"><code>static ssize_t ka_read (...) { <span class="cm">/* TODO 1 */</span> return 0;       }
+static ssize_t ka_write(...) { <span class="cm">/* TODO 2 */</span> return -EINVAL; }
+static long    ka_ioctl(...) { <span class="cm">/* TODO 3 */</span> return -ENOTTY; }</code></pre>
+      <p class="muted">As shipped the module loads but rejects writes and answers no ioctls — so the
+        test fails and the check is <strong>red</strong> until you implement all three.</p>
+    </section>
+
+    <section class="panel" id="touch">
+      <div class="panel__head"><span class="panel__id">[02]</span><h2><span class="prefix">./</span>TOUCH</h2></div>
+      <p>Implement the three handlers, then:</p>
+      <div class="term"><div class="line cmd">make check LESSON=07-char-device-with-ioctl</div></div>
+      <p class="muted" style="margin-top:var(--space-md)"><strong>PASS</strong> when the test prints
+        <code>TEST PASS</code> — write stored the bytes, the ioctl reported the right length, and read
+        returned them unchanged.</p>
+    </section>
+
+    <section class="panel" id="hints">
+      <div class="panel__head"><span class="panel__id">[03]</span><h2><span class="prefix">./</span>GRADUATED HINTS</h2></div>
+      <details class="hint"><summary>ka_write</summary>
+        <div class="hint__body">
+<pre class="code" data-lang="c"><code>size_t n = min_t(size_t, count, BUFSZ);
+if (copy_from_user(ka_buf, ubuf, n))
+        return -EFAULT;
+ka_len = n;
+return n;</code></pre></div>
+      </details>
+      <details class="hint"><summary>ka_read</summary>
+        <div class="hint__body"><p style="margin:0">A kernel helper copies from a buffer to userspace
+          and honors <code>*ppos</code> (so the 2nd read returns 0):</p>
+<pre class="code" data-lang="c"><code>return simple_read_from_buffer(ubuf, count, ppos, ka_buf, ka_len);</code></pre></div>
+      </details>
+      <details class="hint"><summary>ka_ioctl</summary>
+        <div class="hint__body">
+<pre class="code" data-lang="c"><code>if (cmd == KA_GET_LEN) {
+        int len = ka_len;
+        if (copy_to_user((int __user *)arg, &amp;len, sizeof(len)))
+                return -EFAULT;
+        return 0;
+}
+return -ENOTTY;</code></pre></div>
+      </details>
+    </section>
+
+    <section class="panel" id="further">
+      <div class="panel__head"><span class="panel__id">[04]</span><h2><span class="prefix">./</span>FURTHER READING</h2></div>
+      <p class="muted">Canonical references to explore deeper — each opens in a new tab.</p>
+      <ul>
+        <li><a class="ext" href="https://docs.kernel.org/userspace-api/ioctl/ioctl-number.html" target="_blank" rel="noopener noreferrer">docs.kernel.org — Ioctl Numbers</a> — how to allocate <code>_IO</code>/<code>_IOR</code>/<code>_IOW</code> command numbers like <code>KA_GET_LEN</code>.</li>
+        <li><a class="ext" href="https://man7.org/linux/man-pages/man2/ioctl.2.html" target="_blank" rel="noopener noreferrer">ioctl(2)</a> — the userspace side of the call <code>test.c</code> makes.</li>
+      </ul>
+    </section>
+
+  </main>
+
+  <aside class="diagnostics" aria-label="Lesson diagnostics">
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">./</span>diagnostics</h2></div>
+      <div class="kv"><span class="k">lesson</span><span class="v">07</span></div>
+      <div class="kv"><span class="k">module</span><span class="v">modification (capstone)</span></div>
+      <div class="kv"><span class="k">state</span><span class="v"><span class="badge badge--warn">CHALLENGE</span></span></div>
+      <div class="kv"><span class="k">you write</span><span class="v">read / write / ioctl</span></div>
+      <div class="kv"><span class="k">builds</span><span class="v">.ko + userspace test</span></div>
+    </section>
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">&gt;</span> pass marker</h2></div>
+      <div class="kv"><span class="k">test</span><span class="v">TEST PASS</span></div>
+    </section>
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">$</span> next</h2></div>
+      <div class="stack">
+        <a class="btn" href="../wheel/works-on-my-laptop/index.html">WHEEL &rarr;</a>
+        <a class="btn btn--dim" href="../05-the-driver-that-oopses/index.html">&larr; LESSON 05</a>
+      </div>
+    </section>
+  </aside>
+
+</div>
+</body>
+</html>

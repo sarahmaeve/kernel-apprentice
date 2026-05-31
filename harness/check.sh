@@ -20,6 +20,7 @@ LESSONS=(
   H1-gdb-the-live-kernel
   06-instrument-it-yourself
   05-the-driver-that-oopses
+  07-char-device-with-ioctl
   wheel/works-on-my-laptop
 )
 
