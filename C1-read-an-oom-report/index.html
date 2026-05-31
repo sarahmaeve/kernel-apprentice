@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>C1 // read an OOM report</title>
+<meta name="description" content="Trigger a cgroup OOM and read the kernel's report field by field: victim, RSS, oom_score, constraint.">
+<!-- IBM Plex Mono self-hosted via @font-face in crt.css -->
+<link rel="stylesheet" href="../assets/crt.css">
+</head>
+<body>
+<div class="app">
+
+  <header class="statusline">
+    <span class="live"><span class="prefix">&gt;</span> lesson C1 // read an OOM report<span class="cursor" aria-hidden="true"></span></span>
+    <span class="meta">[ observe &middot; read &middot; touch ]</span>
+  </header>
+
+  <nav class="rail" aria-label="Sections">
+    <span class="label">./lesson C1</span>
+    <nav>
+      <a class="navlink" href="#observe" aria-current="true">observe</a>
+      <a class="navlink" href="#read">read</a>
+      <a class="navlink" href="#touch">touch</a>
+      <a class="navlink" href="#verify">verify</a>
+      <a class="navlink" href="#further">further reading</a>
+    </nav>
+    <span class="label" style="margin-top:var(--space-lg)">./source</span>
+    <nav>
+      <a class="navlink" href="../index.html">&larr; command index</a>
+      <a class="navlink" href="README.md">README.md</a>
+      <a class="navlink" href="hog.c">hog.c</a>
+      <a class="navlink" href="check.sh">check.sh</a>
+    </nav>
+  </nav>
+
+  <main class="workspace">
+
+    <section class="panel panel--hero" id="observe">
+      <h1><span class="prefix">$</span> C1 ./read-an-oom-report</h1>
+      <p class="tagline">the kernel's densest, most useful print</p>
+      <p>When the kernel can't find memory, it kills a process and leaves a detailed
+        <strong>report</strong>. "Service died, no error in its logs" is one of the most common
+        production pages — and nine times out of ten the answer is in that report, <em>if</em> you
+        can read it. Here you trigger a real OOM and learn to read it fluently.</p>
+      <div class="term"><div class="line cmd">make check LESSON=C1-read-an-oom-report</div></div>
+      <p class="muted" style="margin-top:var(--space-md)">A service runs in a cgroup capped at
+        <code>memory.max = 16M</code>, grows past it, and the cgroup OOM killer reaps it. The check
+        dumps the report, <code>/proc/meminfo</code>, and <code>memory.events</code>.</p>
+    </section>
+
+    <section class="panel" id="read">
+      <div class="panel__head"><span class="panel__id">[01]</span><h2><span class="prefix">./</span>READ &mdash; the report explains it</h2></div>
+<pre class="code" data-lang="text"><code>hog invoked oom-killer: gfp_mask=0x..., order=0, oom_score_adj=0
+memory: usage 16384kB, limit 16384kB, failcnt 73
+Tasks state (memory values in pages):
+[  pid  ]   uid  tgid total_vm      rss ... oom_score_adj  name
+[    67 ]     0    67     4358     4064 ...             0   hog
+oom-kill:constraint=CONSTRAINT_MEMCG,...,oom_memcg=/svc,task=hog,pid=67
+Memory cgroup out of memory: Killed process 67 (hog) ... anon-rss:16256kB, ...</code></pre>
+      <ul>
+        <li><strong><code>invoked oom-killer</code></strong> — who was <em>asking</em> for memory when reclaim failed (not always the victim).</li>
+        <li><strong><code>memory: usage … limit …</code></strong> — the cgroup is at its cap; reclaim couldn't free enough.</li>
+        <li><strong><code>Tasks state</code> table</strong> — every candidate with <code>rss</code> and <code>oom_score_adj</code>; the killer scores by footprint and picks the highest.</li>
+        <li><strong><code>constraint=CONSTRAINT_MEMCG</code></strong> — the tell: a <em>cgroup</em> limit, not the whole machine (<code>CONSTRAINT_NONE</code>).</li>
+        <li><strong><code>Killed process 67 (hog) … anon-rss</code></strong> — the victim: pid, name, and resident memory when reaped.</li>
+      </ul>
+    </section>
+
+    <section class="panel" id="touch">
+      <div class="panel__head"><span class="panel__id">[02]</span><h2><span class="prefix">./</span>TOUCH &mdash; corroborate at /proc and the cgroup</h2></div>
+<pre class="code" data-lang="sh"><code>grep -E 'MemTotal|MemFree|MemAvailable|AnonPages' /proc/meminfo  <span class="cm"># system memory</span>
+cat /cg/svc/memory.events                                        <span class="cm"># oom_kill count</span>
+cat /proc/&lt;pid&gt;/oom_score                                        <span class="cm"># a live task's score</span></code></pre>
+      <p class="muted"><code>memory.events</code>' <code>oom_kill</code> counter ticking is the
+        machine-readable version of the report — what you'd alert on.</p>
+    </section>
+
+    <section class="panel" id="verify">
+      <div class="panel__head"><span class="panel__id">[03]</span><h2><span class="prefix">$</span> VERIFY</h2></div>
+      <p>Green when the captured log contains:</p>
+      <ul>
+        <li>the OOM report (with the per-task table) <span class="badge badge--ok">REPORT</span></li>
+        <li><code>/proc/meminfo</code> + <code>memory.events</code> <span class="badge badge--ok">EVIDENCE</span></li>
+      </ul>
+    </section>
+
+    <section class="panel" id="further">
+      <div class="panel__head"><span class="panel__id">[04]</span><h2><span class="prefix">./</span>FURTHER READING</h2></div>
+      <p class="muted">Canonical references to explore deeper — each opens in a new tab.</p>
+      <ul>
+        <li><a class="ext" href="https://docs.kernel.org/admin-guide/cgroup-v2.html" target="_blank" rel="noopener noreferrer">docs.kernel.org — Control Group v2</a> — <code>memory.max</code>, <code>memory.events</code>, and how the cgroup OOM killer chooses a victim.</li>
+        <li><a class="ext" href="https://docs.kernel.org/admin-guide/mm/concepts.html" target="_blank" rel="noopener noreferrer">docs.kernel.org — Concepts overview (memory management)</a> — reclaim and the OOM killer behind the report.</li>
+      </ul>
+    </section>
+
+  </main>
+
+  <aside class="diagnostics" aria-label="Lesson diagnostics">
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">./</span>diagnostics</h2></div>
+      <div class="kv"><span class="k">lesson</span><span class="v">C1</span></div>
+      <div class="kv"><span class="k">module</span><span class="v">memory</span></div>
+      <div class="kv"><span class="k">state</span><span class="v"><span class="badge badge--info">READY</span></span></div>
+      <div class="kv"><span class="k">surface</span><span class="v">OOM report &middot; /proc &middot; cgroup</span></div>
+      <div class="kv"><span class="k">pairs with</span><span class="v">Wheel: mystery-oom-kill</span></div>
+    </section>
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">&gt;</span> pass markers</h2></div>
+      <div class="kv"><span class="k">report</span><span class="v">Memory cgroup out of memory</span></div>
+      <div class="kv"><span class="k">evidence</span><span class="v">/proc/meminfo</span></div>
+    </section>
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">$</span> next</h2></div>
+      <div class="stack">
+        <a class="btn" href="../wheel/mystery-oom-kill/index.html">WHEEL: mystery-oom-kill &rarr;</a>
+        <a class="btn btn--dim" href="../07-char-device-with-ioctl/index.html">&larr; LESSON 07</a>
+      </div>
+    </section>
+  </aside>
+
+</div>
+</body>
+</html>

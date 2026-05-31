@@ -21,6 +21,7 @@ LESSONS=(
   06-instrument-it-yourself
   05-the-driver-that-oopses
   07-char-device-with-ioctl
+  C1-read-an-oom-report
   wheel/works-on-my-laptop
   wheel/mystery-oom-kill
 )
