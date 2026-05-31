@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>C2 // KASAN catches you (optional)</title>
-<meta name="description" content="Optional: build a second KASAN kernel, load a module with a slab out-of-bounds write, read the splat, fix the off-by-one.">
+<meta name="description" content="Optional: build a second KASAN kernel, then read three report shapes — out-of-bounds, use-after-free, double-free — and fix each.">
 <!-- IBM Plex Mono self-hosted via @font-face in crt.css -->
 <link rel="stylesheet" href="../assets/crt.css">
 </head>
@@ -21,7 +21,7 @@
     <nav>
       <a class="navlink" href="#optional" aria-current="true">optional</a>
       <a class="navlink" href="#observe">observe</a>
-      <a class="navlink" href="#read">read</a>
+      <a class="navlink" href="#read">read &mdash; 3 reports</a>
       <a class="navlink" href="#touch">touch</a>
       <a class="navlink" href="#verify">verify</a>
       <a class="navlink" href="#further">further reading</a>
@@ -30,7 +30,9 @@
     <nav>
       <a class="navlink" href="../index.html">&larr; command index</a>
       <a class="navlink" href="README.md">README.md</a>
-      <a class="navlink" href="module/kasan_demo.c">module/kasan_demo.c</a>
+      <a class="navlink" href="module/kasan_oob.c">kasan_oob.c</a>
+      <a class="navlink" href="module/kasan_uaf.c">kasan_uaf.c</a>
+      <a class="navlink" href="module/kasan_df.c">kasan_df.c</a>
       <a class="navlink" href="check.sh">check.sh</a>
     </nav>
   </nav>
@@ -39,73 +41,101 @@
 
     <section class="panel panel--hero" id="optional">
       <h1><span class="prefix">$</span> C2 ./kasan-catches-you <span class="badge badge--opt">OPTIONAL</span></h1>
-      <p class="tagline">build a KASAN kernel; let it catch a memory bug</p>
+      <p class="tagline">build a KASAN kernel; read three memory-bug reports</p>
       <div class="panel panel--warn" style="margin:var(--space-md) 0">
         <div class="panel__head"><span class="panel__id">[!]</span><h2 style="font-size:1.05rem"><span class="prefix">&gt;</span> this lesson builds a SECOND kernel</h2></div>
         <p>KASAN is compile-time instrumentation, so it needs its own kernel built with
-          <code>CONFIG_KASAN</code> — a <strong>full second kernel compile</strong> (minutes) and extra
-          disk on the build volume. The base tutorial kernel is untouched, and <strong>nothing else in
-          the curriculum depends on this</strong> — skip it freely.</p>
+          <code>CONFIG_KASAN</code> — a <strong>full second kernel compile</strong> (minutes) and
+          <strong>~3&nbsp;GB</strong> of extra disk on the build volume. The base tutorial kernel is
+          untouched, and <strong>nothing else in the curriculum depends on this</strong> — skip it
+          freely.</p>
         <p class="muted" style="margin-top:var(--space-sm)">This mirrors real life: you build a
           dedicated KASAN kernel to chase a memory bug, boot it, read the report, then go back to
-          your normal kernel.</p>
+          your normal kernel. Once it's built, all three bugs below run on it — no further setup.</p>
       </div>
       <p>KASAN (Kernel Address Sanitizer) inserts a check before every load/store and keeps
         <strong>shadow memory</strong> marking which bytes are legal to touch, with poisoned
-        <strong>redzones</strong> around allocations. An out-of-bounds or use-after-free is caught
+        <strong>redzones</strong> around allocations and a <strong>quarantine</strong> that keeps
+        freed objects poisoned. An out-of-bounds, use-after-free, or double-free is caught
         <em>at the offending instruction</em> — not as a mysterious crash far away and later.</p>
     </section>
 
     <section class="panel" id="observe">
-      <div class="panel__head"><span class="panel__id">[01]</span><h2><span class="prefix">./</span>OBSERVE &mdash; load it, KASAN catches it</h2></div>
+      <div class="panel__head"><span class="panel__id">[01]</span><h2><span class="prefix">./</span>OBSERVE &mdash; three bugs, escalating</h2></div>
       <p>Build the overlay kernel once (or let the check do it), then run the lesson:</p>
       <div class="term">
         <div class="line cmd">make kasan-kernel</div>
         <div class="line cmd">make check LESSON=C2-kasan-catches-you</div>
       </div>
-      <p class="muted" style="margin-top:var(--space-md)">The shipped <code>module/kasan_demo.c</code>
-        writes one byte past a 64-byte <code>kmalloc</code>. On the KASAN kernel that produces a
-        report and the check stays <span class="badge badge--warn">RED</span>, printing the splat for
-        you to read.</p>
+      <p class="muted" style="margin-top:var(--space-md)">The check builds three tiny modules — one
+        bug each — and <code>insmod</code>s them on the KASAN kernel. Every unfixed bug prints a full
+        splat and the check stays <span class="badge badge--warn">RED</span>.</p>
+      <div class="table-wrap" style="margin-top:var(--space-md)">
+        <table>
+          <thead><tr><th>part</th><th>module</th><th>bug</th><th>what its report adds</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td><code>kasan_oob.c</code></td><td>slab out-of-bounds write</td><td>access stack + <code>Allocated by</code> + shadow map</td></tr>
+            <tr><td>2</td><td><code>kasan_uaf.c</code></td><td>use-after-free</td><td>the <code>Freed by task</code> stack — the three-stack read</td></tr>
+            <tr><td>3</td><td><code>kasan_df.c</code></td><td>double-free</td><td>a new category: <code>double-free or invalid-free</code></td></tr>
+          </tbody>
+        </table>
+      </div>
     </section>
 
     <section class="panel" id="read">
-      <div class="panel__head"><span class="panel__id">[02]</span><h2><span class="prefix">./</span>READ &mdash; the report explains it</h2></div>
-<pre class="code" data-lang="text"><code>BUG: KASAN: slab-out-of-bounds in kasan_demo_init+0x.../0x... [kasan_demo]
+      <div class="panel__head"><span class="panel__id">[02]</span><h2><span class="prefix">./</span>READ &mdash; the three report shapes</h2></div>
+
+      <h3 style="margin-top:var(--space-sm)">Part 1 &mdash; out-of-bounds <span class="muted">(kasan_oob)</span></h3>
+<pre class="code" data-lang="text"><code>BUG: KASAN: slab-out-of-bounds in kasan_oob_init+0x.../0x... [kasan_oob]
 Write of size 1 at addr ffff... by task ...
-
  &lt;stack of the bad access&gt;          <span class="cm">&lt;- the line to fix</span>
-
 Allocated by task ...:
  &lt;stack of the kmalloc&gt;             <span class="cm">&lt;- the object you overran</span>
-
 Memory state around the buggy address:
  ... 00 00 fc fc fc ...             <span class="cm">&lt;- 00 = in-bounds, fc = redzone</span></code></pre>
-      <ul>
-        <li><strong><code>slab-out-of-bounds</code> / <code>Write of size 1</code></strong> — a one-byte write past a slab object.</li>
-        <li><strong>First stack</strong> — the bad access (<code>kasan_demo_init</code>): where the fix goes.</li>
-        <li><strong><code>Allocated by task</code></strong> — where the memory was <code>kmalloc</code>'d: which object you ran past.</li>
-        <li><strong>Shadow map</strong> — <code>00</code> is addressable, <code>fc</code> is a redzone. You wrote into the <code>fc</code>.</li>
-      </ul>
+
+      <h3>Part 2 &mdash; use-after-free <span class="muted">(kasan_uaf — the meatier one)</span></h3>
+<pre class="code" data-lang="text"><code>BUG: KASAN: use-after-free in kasan_uaf_init+0x.../0x... [kasan_uaf]
+Read of size ... at addr ffff... by task ...
+ &lt;stack of the bad access&gt;          <span class="cm">&lt;- where you touched freed memory</span>
+Allocated by task ...:
+ &lt;stack of the kmalloc&gt;
+Freed by task ...:                  <span class="cm">&lt;- NEW: the kfree that already released it</span>
+ &lt;stack of the kfree&gt;</code></pre>
+      <p class="muted">The <code>Freed by task</code> stack pairs the bad read with the exact
+        <code>kfree</code> that released the object — that's how you reason about lifetime bugs.</p>
+
+      <h3>Part 3 &mdash; double-free <span class="muted">(kasan_df)</span></h3>
+<pre class="code" data-lang="text"><code>BUG: KASAN: double-free or invalid-free in kasan_df_init+0x.../0x... [kasan_df]
+Free of addr ffff... by task ...
+Allocated by task ...:
+ &lt;stack of the kmalloc&gt;
+Freed by task ...:                  <span class="cm">&lt;- where it was ALREADY freed</span>
+ &lt;stack of the first kfree&gt;</code></pre>
     </section>
 
     <section class="panel" id="touch">
-      <div class="panel__head"><span class="panel__id">[03]</span><h2><span class="prefix">./</span>TOUCH &mdash; fix the off-by-one</h2></div>
-      <p>Open <code>module/kasan_demo.c</code>. The loop runs <code>i = 0 .. LEN</code> <em>inclusive</em>,
-        so the last write lands on <code>buf[LEN]</code> — out of bounds. Make it stop at
-        <code>LEN - 1</code>:</p>
+      <div class="panel__head"><span class="panel__id">[03]</span><h2><span class="prefix">./</span>TOUCH &mdash; fix all three</h2></div>
+      <ul>
+        <li><strong>Part 1</strong> <code>module/kasan_oob.c</code> — the loop runs <code>i = 0 .. LEN</code>
+          inclusive; stop at <code>LEN - 1</code>:
 <pre class="code" data-lang="c"><code>-	for (i = 0; i &lt;= LEN; i++)
-+	for (i = 0; i &lt; LEN; i++)
- 		buf[i] = (char)i;</code></pre>
-      <p class="muted">Re-run; KASAN stays silent and the check goes
++	for (i = 0; i &lt; LEN; i++)</code></pre></li>
+        <li><strong>Part 2</strong> <code>module/kasan_uaf.c</code> — a lifetime bug, not a typo: the
+          <code>pr_info</code> reads the widget after <code>kfree(w)</code>. Move that log
+          <strong>before</strong> the free.</li>
+        <li><strong>Part 3</strong> <code>module/kasan_df.c</code> — the object is freed twice; free it
+          <strong>once</strong> (remove the duplicate <code>kfree(p)</code>).</li>
+      </ul>
+      <p class="muted">Re-run; with all three fixed, KASAN stays silent and the check goes
         <span class="badge badge--ok">GREEN</span>.</p>
     </section>
 
     <section class="panel" id="verify">
       <div class="panel__head"><span class="panel__id">[04]</span><h2><span class="prefix">$</span> VERIFY</h2></div>
       <ul>
-        <li><span class="badge badge--fail">RED</span> while <code>BUG: KASAN</code> appears in the boot log (the splat is printed for you to read).</li>
-        <li><span class="badge badge--ok">GREEN</span> once the module loads with no KASAN report.</li>
+        <li><span class="badge badge--fail">RED</span> while any <code>BUG: KASAN</code> naming a module appears (the splats are printed for you to read).</li>
+        <li><span class="badge badge--ok">GREEN</span> once all three modules load with no KASAN report.</li>
       </ul>
       <p class="muted">Reset to the unsolved skeleton any time:
         <code>make reset LESSON=C2-kasan-catches-you</code></p>
@@ -115,7 +145,7 @@ Memory state around the buggy address:
       <div class="panel__head"><span class="panel__id">[05]</span><h2><span class="prefix">./</span>FURTHER READING</h2></div>
       <p class="muted">Canonical references to explore deeper — each opens in a new tab.</p>
       <ul>
-        <li><a class="ext" href="https://docs.kernel.org/dev-tools/kasan.html" target="_blank" rel="noopener noreferrer">docs.kernel.org — The Kernel Address Sanitizer (KASAN)</a> — the report format, the three flavors (generic / SW-tags / HW-tags), and shadow memory.</li>
+        <li><a class="ext" href="https://docs.kernel.org/dev-tools/kasan.html" target="_blank" rel="noopener noreferrer">docs.kernel.org — The Kernel Address Sanitizer (KASAN)</a> — the report format, the three flavors (generic / SW-tags / HW-tags), shadow memory, and the quarantine that catches use-after-free.</li>
         <li><a class="ext" href="https://docs.kernel.org/admin-guide/mm/concepts.html" target="_blank" rel="noopener noreferrer">docs.kernel.org — Concepts overview (memory management)</a> — the slab allocator the redzones guard.</li>
       </ul>
     </section>
@@ -128,13 +158,14 @@ Memory state around the buggy address:
       <div class="kv"><span class="k">lesson</span><span class="v">C2</span></div>
       <div class="kv"><span class="k">module</span><span class="v">memory</span></div>
       <div class="kv"><span class="k">state</span><span class="v"><span class="badge badge--opt">OPTIONAL</span> <span class="badge badge--warn">CHALLENGE</span></span></div>
-      <div class="kv"><span class="k">needs</span><span class="v">KASAN overlay kernel (2nd build)</span></div>
-      <div class="kv"><span class="k">edit</span><span class="v">module/kasan_demo.c</span></div>
+      <div class="kv"><span class="k">needs</span><span class="v">KASAN overlay kernel (2nd build, ~3 GB)</span></div>
+      <div class="kv"><span class="k">edit</span><span class="v">module/kasan_{oob,uaf,df}.c</span></div>
     </section>
     <section class="panel">
-      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">&gt;</span> pass markers</h2></div>
-      <div class="kv"><span class="k">red</span><span class="v">BUG: KASAN present</span></div>
-      <div class="kv"><span class="k">green</span><span class="v">module loads, no splat</span></div>
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">&gt;</span> bugs to fix</h2></div>
+      <div class="kv"><span class="k">part 1</span><span class="v">out-of-bounds</span></div>
+      <div class="kv"><span class="k">part 2</span><span class="v">use-after-free</span></div>
+      <div class="kv"><span class="k">part 3</span><span class="v">double-free</span></div>
     </section>
     <section class="panel">
       <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">$</span> next</h2></div>
