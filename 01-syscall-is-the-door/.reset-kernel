@@ -1,0 +1,4 @@
+# Kernel-source files this lesson has you edit (they live in the build volume, not
+# this repo). `make reset` re-extracts these from the pinned tarball to restore the
+# unsolved state — one kernel-relative path per line; '#' comments allowed.
+kernel/sys.c
