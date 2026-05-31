@@ -204,6 +204,7 @@ a:focus-visible, .btn:focus-visible, .navlink:focus-visible {
 .badge--warn { color:var(--warning); }
 .badge--fail { color:var(--error); }
 .badge--info { color:var(--info); }
+.badge--opt  { color:var(--muted); }   /* off the main spine — optional/extra */
 
 /* ---- Terminal block (quickstart commands) ------------------------------- */
 .term {

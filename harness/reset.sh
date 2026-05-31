@@ -42,7 +42,7 @@ if [ -n "$arg" ]; then
   echo "reset $dir (repo source) to its committed skeleton"
   volume_reset "$dir"
 else
-  restore_repo [0-9]*-*/ H[0-9]*-*/ wheel/
+  restore_repo [0-9]*-*/ H[0-9]*-*/ C[0-9]*-*/ wheel/
   echo "reset all lessons (repo source) to their committed skeletons"
   volume_reset ""
 fi

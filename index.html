@@ -165,6 +165,12 @@
               <td><span class="badge badge--info">READY</span></td>
             </tr>
             <tr>
+              <td><a href="C2-kasan-catches-you/index.html">C2</a></td>
+              <td>KASAN catches you <span class="muted">(optional · builds a 2nd kernel)</span></td>
+              <td>build a KASAN kernel; read the slab-out-of-bounds splat and fix the off-by-one</td>
+              <td><span class="badge badge--opt">OPTIONAL</span> <span class="badge badge--warn">CHALLENGE</span></td>
+            </tr>
+            <tr>
               <td><a href="wheel/works-on-my-laptop/index.html">WHL</a></td>
               <td>works on my laptop <span class="muted">(wheel of misfortune)</span></td>
               <td>diagnose a live, broken box — point at the <code>EMFILE</code> evidence, not a guess</td>
@@ -182,7 +188,8 @@
       <p class="muted" style="margin-top:var(--space-md)"><strong>State —</strong>
         <span class="badge badge--info">READY</span> a runnable example to read &amp; observe ·
         <span class="badge badge--warn">CHALLENGE</span> you add code to make it pass ·
-        <span class="badge badge--fail">LIVE FIRE</span> a broken box you diagnose.</p>
+        <span class="badge badge--fail">LIVE FIRE</span> a broken box you diagnose ·
+        <span class="badge badge--opt">OPTIONAL</span> off the main spine (here: needs a second kernel build).</p>
     </section>
 
     <section class="panel" id="quickstart">

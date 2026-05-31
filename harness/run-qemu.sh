@@ -26,8 +26,11 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-[ -f "$KERNEL_BZIMAGE" ] || die "no kernel at $KERNEL_BZIMAGE — run harness/build-kernel.sh first"
-[ -f "$initramfs" ]      || die "no initramfs at $initramfs"
+# Which bzImage to boot. Defaults to the base tutorial kernel; lesson C2 sets
+# KERNEL_IMAGE=$KASAN_BZIMAGE to boot the optional KASAN overlay kernel instead.
+kimg="${KERNEL_IMAGE:-$KERNEL_BZIMAGE}"
+[ -f "$kimg" ]      || die "no kernel at $kimg — run harness/build-kernel.sh first"
+[ -f "$initramfs" ] || die "no initramfs at $initramfs"
 logfile="${logfile:-$(mktemp)}"
 
 # Acceleration: KVM only when the container actually exposes /dev/kvm AND the arch
@@ -42,7 +45,7 @@ set +e
 timeout "${timeout_s}" qemu-system-x86_64 \
   -accel "$accel" -no-reboot -nographic \
   -m "${QEMU_MEM:-512M}" -smp "${QEMU_SMP:-2}" \
-  -kernel "$KERNEL_BZIMAGE" \
+  -kernel "$kimg" \
   -initrd "$initramfs" \
   -append "console=ttyS0 panic=-1 ${append}" \
   < /dev/null 2>&1 | tee "$logfile"

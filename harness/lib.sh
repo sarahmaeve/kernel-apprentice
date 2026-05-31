@@ -24,6 +24,13 @@ KERNEL_SRC="$BUILD_DIR/linux-${KERNEL_VERSION}"
 KERNEL_BZIMAGE="$KERNEL_SRC/arch/x86/boot/bzImage"
 INITRAMFS_BASE="$BUILD_DIR/initramfs-base.cpio.gz"   # BusyBox-only base image
 
+# OPTIONAL KASAN overlay kernel — a SECOND, SEPARATE source tree built in-tree with
+# CONFIG_KASAN, used only by the optional lesson C2. It gets its own extracted copy
+# of the pinned source (an O= build can't share the base tree, which is built
+# in-tree); the base kernel above is never touched.
+KASAN_SRC="$BUILD_DIR/linux-${KERNEL_VERSION}-kasan"
+KASAN_BZIMAGE="$KASAN_SRC/arch/x86/boot/bzImage"
+
 # --- Logging --------------------------------------------------------------
 if [ -t 2 ]; then
   C_BLU=$'\033[34m'; C_GRN=$'\033[32m'; C_RED=$'\033[31m'
@@ -52,4 +59,10 @@ assert_in_container() {
 # Build the pinned kernel once if it isn't already present. Cheap no-op afterwards.
 ensure_kernel() {
   [ -f "$KERNEL_BZIMAGE" ] || "$HARNESS_DIR/build-kernel.sh"
+}
+
+# Build the OPTIONAL KASAN overlay kernel once if missing. NOT part of the normal
+# flow — only lesson C2 calls this, because it's a second full kernel build.
+ensure_kasan_kernel() {
+  [ -f "$KASAN_BZIMAGE" ] || "$HARNESS_DIR/build-kasan-kernel.sh"
 }
