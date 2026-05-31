@@ -31,6 +31,9 @@ while IFS= read -r manifest; do
   while IFS= read -r f; do
     case "$f" in ''|\#*) continue ;; esac
     if tar -C "$BUILD_DIR" -xf "$tarball" "linux-${KERNEL_VERSION}/$f"; then
+      # tar restores the archive's (old) mtime; bump it to now so kbuild recompiles
+      # the file instead of trusting the stale object that still has the solution.
+      touch "$BUILD_DIR/linux-${KERNEL_VERSION}/$f"
       echo "  restored linux-${KERNEL_VERSION}/$f in the build volume"
       n=$((n + 1))
     fi
