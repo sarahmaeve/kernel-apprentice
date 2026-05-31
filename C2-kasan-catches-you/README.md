@@ -43,25 +43,31 @@ The check builds all three modules, boots the KASAN guest, and `insmod`s each. E
 unfixed bug prints a full splat and the check stays **RED**. You fix all three to go
 **GREEN**.
 
-## Read — the three report shapes
+## Hints — open as needed
 
-### Part 1 — out-of-bounds (`kasan_oob.c`)
+Diagnose from the KASAN report first (each module prints its own when you run the
+check). These graduated hints end with the fixes — open only as far as you need.
+
+<details>
+<summary><strong>Part 1 — out-of-bounds (<code>kasan_oob.c</code>): how to read its report</strong></summary>
 
 ```
 BUG: KASAN: slab-out-of-bounds in kasan_oob_init+0x.../0x... [kasan_oob]
 Write of size 1 at addr ffff... by task ...
- <stack of the bad access>          <- the line to fix
+ <stack of the bad access>          <- the line to look at
 Allocated by task ...:
  <stack of the kmalloc>             <- the object you overran
 Memory state around the buggy address:
  ... 00 00 fc fc fc ...             <- 00 = in-bounds, fc = redzone you hit
 ```
+</details>
 
-### Part 2 — use-after-free (`kasan_uaf.c`) — the meatier one
+<details>
+<summary><strong>Part 2 — use-after-free (<code>kasan_uaf.c</code>): how to read its report</strong></summary>
 
 ```
-BUG: KASAN: use-after-free in kasan_uaf_init+0x.../0x... [kasan_uaf]
-Read of size ... at addr ffff... by task ...
+BUG: KASAN: slab-use-after-free in kasan_uaf_init+0x.../0x... [kasan_uaf]
+Read of size 1 at addr ffff... by task ...
  <stack of the bad access>          <- where you touched freed memory
 Allocated by task ...:
  <stack of the kmalloc>
@@ -70,30 +76,34 @@ Freed by task ...:                  <- NEW: the kfree that already released it
 ```
 
 The **Freed by task** stack is the whole point: it pairs the bad read with the exact
-`kfree` that already released the object — that's how you reason about *lifetime*
-bugs.
+`kfree` that already released the object — that's how you reason about *lifetime* bugs.
+</details>
 
-### Part 3 — double-free (`kasan_df.c`)
+<details>
+<summary><strong>Part 3 — double-free (<code>kasan_df.c</code>): how to read its report</strong></summary>
 
 ```
-BUG: KASAN: double-free or invalid-free in kasan_df_init+0x.../0x... [kasan_df]
+BUG: KASAN: double-free in kasan_df_init+0x.../0x... [kasan_df]
 Free of addr ffff... by task ...
 Allocated by task ...:
  <stack of the kmalloc>
 Freed by task ...:                  <- where it was ALREADY freed
  <stack of the first kfree>
 ```
+</details>
 
-## Touch — fix all three
+<details>
+<summary><strong>The fixes — spoiler, all three</strong></summary>
 
 - **Part 1** — `module/kasan_oob.c`: the loop runs `i = 0 .. LEN` *inclusive*. Make it
   stop at `LEN - 1` (`i < LEN`).
-- **Part 2** — `module/kasan_uaf.c`: it's a *lifetime* bug, not a typo. The `pr_info`
-  reads the widget after `kfree(w)`. Log it **before** the free (move the line up).
+- **Part 2** — `module/kasan_uaf.c`: it's a *lifetime* bug, not a typo. The read of
+  `c->host` happens after `kfree(c)`. Move that read (and its log) **before** the free.
 - **Part 3** — `module/kasan_df.c`: the object is freed twice. Free it **once** —
   remove the duplicate `kfree(p)`.
 
 Re-run; with all three fixed, KASAN stays silent and the check goes GREEN.
+</details>
 
 ## Verification
 

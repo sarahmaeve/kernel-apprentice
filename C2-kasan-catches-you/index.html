@@ -21,8 +21,7 @@
     <nav>
       <a class="navlink" href="#optional" aria-current="true">optional</a>
       <a class="navlink" href="#observe">observe</a>
-      <a class="navlink" href="#read">read &mdash; 3 reports</a>
-      <a class="navlink" href="#touch">touch</a>
+      <a class="navlink" href="#hints">graduated hints</a>
       <a class="navlink" href="#verify">verify</a>
       <a class="navlink" href="#further">further reading</a>
     </nav>
@@ -82,57 +81,69 @@
       </div>
     </section>
 
-    <section class="panel" id="read">
-      <div class="panel__head"><span class="panel__id">[02]</span><h2><span class="prefix">./</span>READ &mdash; the three report shapes</h2></div>
+    <section class="panel" id="hints">
+      <div class="panel__head"><span class="panel__id">[02]</span><h2><span class="prefix">./</span>GRADUATED HINTS</h2></div>
+      <p class="muted">Diagnose from the KASAN report first — each module prints its own when you
+        run the check. Open these only as needed; the last one is the answer.</p>
 
-      <h3 style="margin-top:var(--space-sm)">Part 1 &mdash; out-of-bounds <span class="muted">(kasan_oob)</span></h3>
+      <details class="hint"><summary>part 1 &mdash; out-of-bounds (kasan_oob): how to read its report</summary>
+        <div class="hint__body">
 <pre class="code" data-lang="text"><code>BUG: KASAN: slab-out-of-bounds in kasan_oob_init+0x.../0x... [kasan_oob]
 Write of size 1 at addr ffff... by task ...
- &lt;stack of the bad access&gt;          <span class="cm">&lt;- the line to fix</span>
+ &lt;stack of the bad access&gt;          <span class="cm">&lt;- the line to look at</span>
 Allocated by task ...:
  &lt;stack of the kmalloc&gt;             <span class="cm">&lt;- the object you overran</span>
 Memory state around the buggy address:
  ... 00 00 fc fc fc ...             <span class="cm">&lt;- 00 = in-bounds, fc = redzone</span></code></pre>
+        </div>
+      </details>
 
-      <h3>Part 2 &mdash; use-after-free <span class="muted">(kasan_uaf — the meatier one)</span></h3>
-<pre class="code" data-lang="text"><code>BUG: KASAN: use-after-free in kasan_uaf_init+0x.../0x... [kasan_uaf]
-Read of size ... at addr ffff... by task ...
+      <details class="hint"><summary>part 2 &mdash; use-after-free (kasan_uaf): how to read its report</summary>
+        <div class="hint__body">
+<pre class="code" data-lang="text"><code>BUG: KASAN: slab-use-after-free in kasan_uaf_init+0x.../0x... [kasan_uaf]
+Read of size 1 at addr ffff... by task ...
  &lt;stack of the bad access&gt;          <span class="cm">&lt;- where you touched freed memory</span>
 Allocated by task ...:
  &lt;stack of the kmalloc&gt;
 Freed by task ...:                  <span class="cm">&lt;- NEW: the kfree that already released it</span>
  &lt;stack of the kfree&gt;</code></pre>
-      <p class="muted">The <code>Freed by task</code> stack pairs the bad read with the exact
-        <code>kfree</code> that released the object — that's how you reason about lifetime bugs.</p>
+          <p style="margin:0">The <code>Freed by task</code> stack pairs the bad read with the exact
+            <code>kfree</code> that released the object — that's how you reason about lifetime bugs.</p>
+        </div>
+      </details>
 
-      <h3>Part 3 &mdash; double-free <span class="muted">(kasan_df)</span></h3>
-<pre class="code" data-lang="text"><code>BUG: KASAN: double-free or invalid-free in kasan_df_init+0x.../0x... [kasan_df]
+      <details class="hint"><summary>part 3 &mdash; double-free (kasan_df): how to read its report</summary>
+        <div class="hint__body">
+<pre class="code" data-lang="text"><code>BUG: KASAN: double-free in kasan_df_init+0x.../0x... [kasan_df]
 Free of addr ffff... by task ...
 Allocated by task ...:
  &lt;stack of the kmalloc&gt;
 Freed by task ...:                  <span class="cm">&lt;- where it was ALREADY freed</span>
  &lt;stack of the first kfree&gt;</code></pre>
-    </section>
+        </div>
+      </details>
 
-    <section class="panel" id="touch">
-      <div class="panel__head"><span class="panel__id">[03]</span><h2><span class="prefix">./</span>TOUCH &mdash; fix all three</h2></div>
-      <ul>
-        <li><strong>Part 1</strong> <code>module/kasan_oob.c</code> — the loop runs <code>i = 0 .. LEN</code>
-          inclusive; stop at <code>LEN - 1</code>:
+      <details class="hint"><summary>the fixes &mdash; spoiler, all three</summary>
+        <div class="hint__body">
+          <ul>
+            <li><strong>Part 1</strong> <code>module/kasan_oob.c</code> — the loop runs <code>i = 0 .. LEN</code>
+              inclusive; stop at <code>LEN - 1</code>:
 <pre class="code" data-lang="c"><code>-	for (i = 0; i &lt;= LEN; i++)
 +	for (i = 0; i &lt; LEN; i++)</code></pre></li>
-        <li><strong>Part 2</strong> <code>module/kasan_uaf.c</code> — a lifetime bug, not a typo: the
-          <code>pr_info</code> reads the widget after <code>kfree(w)</code>. Move that log
-          <strong>before</strong> the free.</li>
-        <li><strong>Part 3</strong> <code>module/kasan_df.c</code> — the object is freed twice; free it
-          <strong>once</strong> (remove the duplicate <code>kfree(p)</code>).</li>
-      </ul>
-      <p class="muted">Re-run; with all three fixed, KASAN stays silent and the check goes
-        <span class="badge badge--ok">GREEN</span>.</p>
+            <li><strong>Part 2</strong> <code>module/kasan_uaf.c</code> — a lifetime bug, not a typo: the
+              read of <code>c-&gt;host</code> happens after <code>kfree(c)</code>. Move that read (and its
+              log) <strong>before</strong> the free.</li>
+            <li><strong>Part 3</strong> <code>module/kasan_df.c</code> — the object is freed twice; free it
+              <strong>once</strong> (remove the duplicate <code>kfree(p)</code>).</li>
+          </ul>
+          <p style="margin:0">Re-run; with all three fixed, KASAN stays silent and the check goes
+            <span class="badge badge--ok">GREEN</span>.</p>
+        </div>
+      </details>
     </section>
 
     <section class="panel" id="verify">
-      <div class="panel__head"><span class="panel__id">[04]</span><h2><span class="prefix">$</span> VERIFY</h2></div>
+      <div class="panel__head"><span class="panel__id">[03]</span><h2><span class="prefix">$</span> VERIFY</h2></div>
       <ul>
         <li><span class="badge badge--fail">RED</span> while any <code>BUG: KASAN</code> naming a module appears (the splats are printed for you to read).</li>
         <li><span class="badge badge--ok">GREEN</span> once all three modules load with no KASAN report.</li>
@@ -142,7 +153,7 @@ Freed by task ...:                  <span class="cm">&lt;- where it was ALREADY 
     </section>
 
     <section class="panel" id="further">
-      <div class="panel__head"><span class="panel__id">[05]</span><h2><span class="prefix">./</span>FURTHER READING</h2></div>
+      <div class="panel__head"><span class="panel__id">[04]</span><h2><span class="prefix">./</span>FURTHER READING</h2></div>
       <p class="muted">Canonical references to explore deeper — each opens in a new tab.</p>
       <ul>
         <li><a class="ext" href="https://docs.kernel.org/dev-tools/kasan.html" target="_blank" rel="noopener noreferrer">docs.kernel.org — The Kernel Address Sanitizer (KASAN)</a> — the report format, the three flavors (generic / SW-tags / HW-tags), shadow memory, and the quarantine that catches use-after-free.</li>
