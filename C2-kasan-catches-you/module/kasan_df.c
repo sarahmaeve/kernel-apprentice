@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0
-/* kasan_df.c — lesson C2, part 3 of 3: a double-free.
+/* kasan_df.c — lesson C2, part 3 of 3.
  *
- * A different report category: "double-free or invalid-free". The realistic
- * shape is two cleanup paths that both free the same object (an error path that
- * frees, then the normal path frees again). KASAN catches the second free and
- * refuses it. Fix: free exactly once.
+ * Built against the KASAN kernel, so KASAN checks every access this module makes.
+ * As shipped it has a planted bug: loading it produces a KASAN report in a
+ * different category from the other two. Read the report, find the cause in this
+ * file, and fix the module so it loads cleanly.
  */
 #include <linux/module.h>
 #include <linux/slab.h>
@@ -19,15 +19,6 @@ static int __init kasan_df_init(void)
 
 	pr_info("kasan_df: allocated, now releasing\n");
 	kfree(p);
-
-	/*
-	 * TODO(C2 part 3) — THE BUG: p was already freed just above; this frees it a
-	 * second time (imagine a duplicated error/cleanup path). KASAN reports
-	 * double-free or invalid-free.
-	 *
-	 * THE FIX: free p exactly once — remove this second kfree. (Defensively, code
-	 * often also sets p = NULL after freeing, since kfree(NULL) is a safe no-op.)
-	 */
 	kfree(p);
 
 	pr_info("kasan_df: done\n");

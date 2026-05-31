@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0
-/* kasan_oob.c — lesson C2, part 1 of 3: a slab out-of-bounds write.
+/* kasan_oob.c — lesson C2, part 1 of 3.
  *
- * The gentlest KASAN bug: one byte past a kmalloc. Read the splat's access stack
- * (where the bad write is), its "Allocated by task" stack (which object you ran
- * past), and the shadow map (00 = in-bounds, fc = redzone). Then fix the off-by-one.
+ * Built against the KASAN kernel, so KASAN checks every access this module makes.
+ * As shipped it has a planted bug: loading it produces a KASAN report whose access
+ * stack points into this file. Read the report (the lesson page shows how) and fix
+ * the module so it loads cleanly.
  */
 #include <linux/module.h>
 #include <linux/slab.h>
@@ -21,13 +22,6 @@ static int __init kasan_oob_init(void)
 
 	pr_info("kasan_oob: writing a %d-byte buffer\n", LEN);
 
-	/*
-	 * TODO(C2 part 1) — THE BUG: i runs 0 .. LEN *inclusive*, so the last write
-	 * lands on buf[LEN] — one byte PAST the 64-byte allocation. KASAN reports
-	 * slab-out-of-bounds. Valid indices are buf[0 .. LEN-1].
-	 *
-	 * THE FIX: stop before LEN (i < LEN) so the loop stays in bounds.
-	 */
 	for (i = 0; i <= LEN; i++)
 		buf[i] = (char)i;
 

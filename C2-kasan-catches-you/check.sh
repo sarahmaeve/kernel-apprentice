@@ -73,11 +73,11 @@ INIT
 done
 
 if [ -n "$still_broken" ]; then
-  warn "still failing:$still_broken — read the splats above. By part:"
-  warn "  * kasan_oob — slab-out-of-bounds: fix the off-by-one loop bound"
-  warn "  * kasan_uaf — use-after-free: read the 'Freed by task' stack; log BEFORE the kfree"
-  warn "  * kasan_df  — double-free: free exactly once (drop the duplicate kfree)"
-  die "fix the remaining bug(s) in module/kasan_*.c so KASAN stays silent, then re-run."
+  warn "still failing:$still_broken — read each module's splat above:"
+  warn "  * the first stack is the bad access — it points at the line in the .c"
+  warn "  * 'Allocated by task' / 'Freed by task' show the object's history"
+  warn "  * the shadow map marks which bytes were off-limits"
+  die "diagnose each report and fix module/kasan_*.c so KASAN stays silent, then re-run."
 fi
 
 ok "no KASAN splat from any module — all three bugs fixed"
