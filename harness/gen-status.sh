@@ -42,7 +42,7 @@ fi
 if [ -f "$BZIMAGE" ]; then ker_label=OK; ker_kind=ok; else ker_label=PENDING; ker_kind=warn; fi
 
 # lessons green: count pass-records written by harness/check.sh
-lessons=(01-syscall-is-the-door 02-printk-and-ring-buffer 03-proc-is-code 04-kernel-narrates-itself H1-gdb-the-live-kernel 06-instrument-it-yourself wheel/works-on-my-laptop)
+lessons=(01-syscall-is-the-door 02-printk-and-ring-buffer 03-proc-is-code 04-kernel-narrates-itself H1-gdb-the-live-kernel 06-instrument-it-yourself 05-the-driver-that-oopses wheel/works-on-my-laptop)
 pass=0
 for l in "${lessons[@]}"; do
   [ -f "$CHECKS/$(echo "$l" | tr / _).pass" ] && pass=$((pass+1))

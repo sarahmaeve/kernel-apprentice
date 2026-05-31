@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>05 // the driver that oopses</title>
+<meta name="description" content="CHALLENGE: a module oopses on write. Read the oops, find the NULL deref, fix it.">
+<!-- IBM Plex Mono self-hosted via @font-face in crt.css -->
+<link rel="stylesheet" href="../assets/crt.css">
+</head>
+<body>
+<div class="app">
+
+  <header class="statusline">
+    <span class="live"><span class="prefix">&gt;</span> lesson 05 // the driver that oopses<span class="cursor" aria-hidden="true"></span></span>
+    <span class="meta">[ challenge &middot; read the crash, fix it ]</span>
+  </header>
+
+  <nav class="rail" aria-label="Sections">
+    <span class="label">./lesson 05</span>
+    <nav>
+      <a class="navlink" href="#symptom" aria-current="true">the symptom</a>
+      <a class="navlink" href="#read">read the oops</a>
+      <a class="navlink" href="#fix">find + fix</a>
+      <a class="navlink" href="#hints">hints</a>
+      <a class="navlink" href="#further">further reading</a>
+    </nav>
+    <span class="label" style="margin-top:var(--space-lg)">./source</span>
+    <nav>
+      <a class="navlink" href="../index.html">&larr; command index</a>
+      <a class="navlink" href="README.md">README.md</a>
+      <a class="navlink" href="module/oops_driver.c">module/oops_driver.c</a>
+      <a class="navlink" href="check.sh">check.sh</a>
+    </nav>
+  </nav>
+
+  <main class="workspace">
+
+    <section class="panel panel--fail" id="symptom">
+      <h1><span class="prefix">$</span> 05 ./the-driver-that-oopses</h1>
+      <p class="tagline" style="color:var(--error)">read the crash &middot; find the bug &middot; fix it</p>
+      <p>A module ships with a bug. Writing to <code>/proc/ka-oops</code> crashes the kernel — an
+        <strong>oops</strong> (a NULL pointer dereference). The writing process is killed, but the
+        kernel survives — an oops isn't a panic. <strong>No TODO markers</strong>: you diagnose, like
+        a third-party driver that misbehaves on the real box.</p>
+      <div class="term"><div class="line cmd">make check LESSON=05-the-driver-that-oopses</div></div>
+      <div class="callout" style="margin-top:var(--space-md)">
+        <strong>Working in the workbench.</strong> Edit <code>module/oops_driver.c</code> in this
+        repo (host-editable), then run <code>make check</code> from the host.
+      </div>
+    </section>
+
+    <section class="panel" id="read">
+      <div class="panel__head"><span class="panel__id">[01]</span><h2><span class="prefix">./</span>READ THE OOPS</h2></div>
+      <p>The check writes to <code>/proc/ka-oops</code> and dumps the trace:</p>
+<pre class="code" data-lang="text"><code>BUG: kernel NULL pointer dereference, address: 0000000000000000
+...
+RIP: 0010:ka_write+0x.../0x...  [oops_driver]
+Call Trace:
+ ka_write              [oops_driver]
+ proc_reg_write
+ vfs_write
+ ksys_write</code></pre>
+      <p class="muted">The <strong>RIP</strong> and the top of the <strong>Call Trace</strong> name the
+        crashing function — <code>ka_write</code>, in this module. <code>address: 0000…0000</code> says
+        it dereferenced <strong>NULL</strong>. Open <code>ka_write</code>: what does it write through,
+        and is that pointer valid?</p>
+    </section>
+
+    <section class="panel" id="fix">
+      <div class="panel__head"><span class="panel__id">[02]</span><h2><span class="prefix">./</span>FIND + FIX</h2></div>
+      <p><code>ka_write</code> copies the user data into a local buffer (fine), then
+        <code>memcpy</code>s it into <code>state-&gt;buf</code>. Where is <code>state-&gt;buf</code>
+        set? <code>ka_init</code> allocates <code>state</code> but <strong>never allocates
+        <code>state-&gt;buf</code></strong> — so it's <code>NULL</code>. That's the deref. Give the
+        buffer real memory.</p>
+      <p class="muted"><strong>PASS</strong> when the write completes with no oops — the log shows
+        <code>kernel-apprentice: ka-oops stored N bytes</code>.</p>
+    </section>
+
+    <section class="panel" id="hints">
+      <div class="panel__head"><span class="panel__id">[03]</span><h2><span class="prefix">./</span>GRADUATED HINTS</h2></div>
+      <details class="hint"><summary>where does it crash?</summary>
+        <div class="hint__body"><p style="margin:0">The <code>RIP</code> / first Call Trace frame is
+          <code>ka_write</code>; the faulting <code>address:</code> is <code>0</code>, so it derefs a
+          NULL pointer.</p></div>
+      </details>
+      <details class="hint"><summary>what's NULL?</summary>
+        <div class="hint__body"><p style="margin:0"><code>ka_write</code> <code>memcpy</code>s into
+          <code>state-&gt;buf</code>. <code>ka_init</code> does <code>state = kzalloc(...)</code> but
+          never sets <code>state-&gt;buf</code> — so it stays <code>NULL</code>.</p></div>
+      </details>
+      <details class="hint"><summary>the fix</summary>
+        <div class="hint__body">
+<pre class="code" data-lang="c"><code>state-&gt;buf = kmalloc(BUFSZ, GFP_KERNEL);   <span class="cm">// in ka_init, after state is allocated</span>
+if (!state-&gt;buf) {
+        kfree(state);
+        return -ENOMEM;
+}</code></pre>
+          <p style="margin:0"><code>ka_exit</code> already <code>kfree</code>s <code>state-&gt;buf</code>, so no leak.</p></div>
+      </details>
+    </section>
+
+    <section class="panel" id="further">
+      <div class="panel__head"><span class="panel__id">[04]</span><h2><span class="prefix">./</span>FURTHER READING</h2></div>
+      <p class="muted">Canonical references to explore deeper — each opens in a new tab.</p>
+      <ul>
+        <li><a class="ext" href="https://docs.kernel.org/admin-guide/bug-hunting.html" target="_blank" rel="noopener noreferrer">docs.kernel.org — Bug hunting</a> — reading an oops, finding the bug's location, taint flags, decoding.</li>
+        <li><a class="ext" href="https://docs.kernel.org/process/debugging/gdb-kernel-debugging.html" target="_blank" rel="noopener noreferrer">docs.kernel.org — Debugging kernel and modules via gdb</a> — turn a RIP address into a source line (pairs with H1).</li>
+      </ul>
+    </section>
+
+  </main>
+
+  <aside class="diagnostics" aria-label="Lesson diagnostics">
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">./</span>diagnostics</h2></div>
+      <div class="kv"><span class="k">lesson</span><span class="v">05</span></div>
+      <div class="kv"><span class="k">module</span><span class="v">crashes &amp; oops</span></div>
+      <div class="kv"><span class="k">state</span><span class="v"><span class="badge badge--warn">CHALLENGE</span></span></div>
+      <div class="kv"><span class="k">you fix</span><span class="v">a NULL deref</span></div>
+      <div class="kv"><span class="k">builds</span><span class="v">out-of-tree .ko</span></div>
+    </section>
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">&gt;</span> pass marker</h2></div>
+      <div class="kv"><span class="k">no oops</span><span class="v">+ ka-oops stored N</span></div>
+    </section>
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">$</span> next</h2></div>
+      <div class="stack">
+        <a class="btn" href="../wheel/works-on-my-laptop/index.html">WHEEL &rarr;</a>
+        <a class="btn btn--dim" href="../06-instrument-it-yourself/index.html">&larr; LESSON 06</a>
+      </div>
+    </section>
+  </aside>
+
+</div>
+</body>
+</html>

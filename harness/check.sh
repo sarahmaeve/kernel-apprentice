@@ -19,6 +19,7 @@ LESSONS=(
   04-kernel-narrates-itself
   H1-gdb-the-live-kernel
   06-instrument-it-yourself
+  05-the-driver-that-oopses
   wheel/works-on-my-laptop
 )
 
