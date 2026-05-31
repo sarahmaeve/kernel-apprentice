@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>kernel-apprentice // command interface</title>
+<meta name="description" content="Read the kernel. Debug the boundary. A workbench for learning to read kernel code and debug software–kernel interactions.">
+<!-- IBM Plex Mono is self-hosted via @font-face in crt.css (assets/fonts/, OFL-1.1) -->
+<link rel="stylesheet" href="assets/crt.css">
+</head>
+<body>
+<div class="app">
+
+  <!-- ===== top status line ===== -->
+  <header class="statusline">
+    <span class="live"><span class="prefix">&gt;</span> system: <span data-status-line>phase-1 authored &middot; awaiting sha256 pin + first build</span><span class="cursor" aria-hidden="true"></span></span>
+    <span class="meta">[ kernel 6.18.33 LTS ] [ x86_64 ] [ 2026-05-31 ]</span>
+  </header>
+
+  <!-- ===== left rail ===== -->
+  <nav class="rail" aria-label="Sections">
+    <span class="label">./navigation</span>
+    <nav>
+      <a class="navlink" href="#mission" aria-current="true">mission</a>
+      <a class="navlink" href="#architecture">architecture</a>
+      <a class="navlink" href="#method">method</a>
+      <a class="navlink" href="#curriculum">curriculum</a>
+      <a class="navlink" href="#quickstart">quickstart</a>
+      <a class="navlink" href="#portability">portability</a>
+    </nav>
+    <span class="label" style="margin-top:var(--space-lg)">./source</span>
+    <nav>
+      <a class="navlink" href="DESIGN.md">DESIGN.md</a>
+      <a class="navlink" href="README.md">README.md</a>
+      <a class="navlink" href="harness/README.md">harness/</a>
+    </nav>
+  </nav>
+
+  <!-- ===== central workspace ===== -->
+  <main class="workspace">
+
+    <section class="panel panel--hero" id="mission">
+      <h1><span class="prefix">$</span> ./kernel-apprentice</h1>
+      <p class="tagline">read the kernel &middot; debug the boundary</p>
+      <p>Learn to <strong>read kernel code and debug how software interacts with the
+        kernel</strong> — fast enough to be useful on real problems. The motivating
+        case is concrete: novel software (a service, runtime, driver, appliance)
+        misbehaves on a production-shaped box in ways that never show up on a
+        developer laptop, and you need to localize it.</p>
+      <p class="muted">This is <em>not</em> a path to landing upstream patches or chasing exotic
+        internals. It builds the reader + tracer skill set: fluency at the syscall
+        boundary, a subsystem map to localize a problem, real facility with tracing
+        tools, and the ability to read kernel C and a stack trace.</p>
+    </section>
+
+    <section class="panel" id="architecture">
+      <div class="panel__head">
+        <span class="panel__id">[01]</span>
+        <h2><span class="prefix">./</span>ARCHITECTURE</h2>
+      </div>
+      <div class="callout">
+        <p style="margin:0">The <strong>container is the workbench.</strong> A <strong>QEMU VM launched
+          from it is the real, breakable kernel.</strong> The safety boundary for kernel
+          experiments is QEMU — not the container.</p>
+      </div>
+      <div class="grid-2" style="margin-top:var(--space-lg)">
+        <div class="cell">
+          <h3>workbench &middot; container</h3>
+          <p class="muted" style="margin:0">Pinned kernel source, cross toolchain, QEMU, and tracing
+            tools (strace, perf, bpftrace, trace-cmd). Disposable and reproducible.
+            Shares the host kernel — so it can't boot one you built.</p>
+        </div>
+        <div class="cell">
+          <h3>guest &middot; QEMU</h3>
+          <p class="muted" style="margin:0">The kernel you observe, modify, and break freely. Booted
+            with serial captured for verification. A lean BusyBox initramfs boots in
+            seconds; modules and rebuilds only work on a kernel you control.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" id="method">
+      <div class="panel__head">
+        <span class="panel__id">[02]</span>
+        <h2><span class="prefix">./</span>METHOD &mdash; one event, three views</h2>
+      </div>
+      <p class="muted">Each lesson anchors on a single observable moment and walks it
+        through three lenses. Symptom-first: you're handed what production shows and
+        you drive.</p>
+      <div class="grid-3">
+        <div class="cell"><h3>observe</h3><p class="muted" style="margin:0">A tool <em>shows</em> the
+          phenomenon — <code>strace</code> at the door, <code>dmesg</code> on the buffer.</p></div>
+        <div class="cell"><h3>read</h3><p class="muted" style="margin:0">Kernel C <em>explains</em> the
+          machinery — the handler behind the syscall, the module behind the printk.</p></div>
+        <div class="cell"><h3>touch</h3><p class="muted" style="margin:0">Your own <code>printk</code> /
+          kprobe lets you <em>reach in</em> and confirm that exact line ran.</p></div>
+      </div>
+    </section>
+
+    <section class="panel" id="curriculum">
+      <div class="panel__head">
+        <span class="panel__id">[03]</span>
+        <h2><span class="prefix">./</span>CURRICULUM &mdash; phase 1 slice</h2>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <caption>Each directory is self-contained: a README (lesson + challenge + hints) and a check.sh that boots the guest and reports PASS/FAIL.</caption>
+          <thead>
+            <tr><th>id</th><th>lesson</th><th>you prove</th><th>state</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><a href="01-syscall-is-the-door/index.html">01</a></td>
+              <td>the syscall is the door</td>
+              <td>find the function behind <code>getpid()</code> and make it announce itself in <code>dmesg</code></td>
+              <td><span class="badge badge--warn">CHALLENGE</span></td>
+            </tr>
+            <tr>
+              <td><a href="02-printk-and-ring-buffer/index.html">02</a></td>
+              <td>printk and the ring buffer</td>
+              <td>build a module, watch the kernel log fill, see the console filter</td>
+              <td><span class="badge badge--ok">WORKED</span></td>
+            </tr>
+            <tr>
+              <td><a href="wheel/works-on-my-laptop/index.html">WHL</a></td>
+              <td>works on my laptop <span class="muted">(wheel of misfortune)</span></td>
+              <td>diagnose a live, broken box — point at the <code>EMFILE</code> evidence, not a guess</td>
+              <td><span class="badge badge--fail">LIVE FIRE</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel" id="quickstart">
+      <div class="panel__head">
+        <span class="panel__id">[04]</span>
+        <h2><span class="prefix">$</span> QUICKSTART</h2>
+      </div>
+      <div class="term" role="group" aria-label="Quickstart commands">
+        <div class="line cmt"># 1. build the workbench image (starts colima on macOS)</div>
+        <div class="line cmd">make image</div>
+        <div class="line cmt"># 2. build the pinned kernel — one-time, then cached forever</div>
+        <div class="line cmt">#    first run prints the tarball sha256 and asks you to pin it (no guessed hashes)</div>
+        <div class="line cmd">make kernel</div>
+        <div class="line cmt"># 3. do a lesson</div>
+        <div class="line cmd">make check LESSON=01-syscall-is-the-door</div>
+        <div class="line out">PASS  view 1 — strace shows getpid() crossing the door</div>
+        <div class="line out">PASS  view 3 — your printk fired for the 'door' process</div>
+      </div>
+      <p class="muted" style="margin-top:var(--space-md)"><code>make help</code> lists every target;
+        <code>make check</code> with no <code>LESSON</code> runs them all.</p>
+    </section>
+
+    <section class="panel" id="portability">
+      <div class="panel__head">
+        <span class="panel__id">[05]</span>
+        <h2><span class="prefix">./</span>PORTABILITY</h2>
+      </div>
+      <ul class="stack" style="margin:0;padding-left:1.2em">
+        <li><strong>Runtime-agnostic.</strong> <code>make RUNTIME=podman ...</code>; colima is used only where present.</li>
+        <li><strong>Same guest everywhere.</strong> Workbench + guest pinned to <code>linux/amd64</code> on every host, so lesson <code>file:line</code> references match for all contributors — native on Intel/x86 Linux, emulated-but-identical on Apple Silicon.</li>
+        <li><strong>Pinned kernel.</strong> <code>6.18.33</code> LTS — newest LTS, maintained through Dec 2028 — set in <code>harness/versions.env</code>.</li>
+      </ul>
+      <p class="foot">CRT Phosphor Command Interface &middot; green-on-black glass terminal &middot;
+        amber = warn, red = fail, cyan = info.</p>
+    </section>
+
+  </main>
+
+  <!-- ===== right diagnostics ===== -->
+  <aside class="diagnostics" aria-label="System diagnostics">
+    <section class="panel">
+      <div class="panel__head">
+        <span class="panel__id">[*]</span>
+        <h2 style="font-size:1.05rem"><span class="prefix">./</span>diagnostics</h2>
+      </div>
+      <div class="kv"><span class="k">kernel</span><span class="v"><span data-fact="kernel">6.18.33</span> <span class="badge badge--warn" data-status="pinned">UNPINNED</span></span></div>
+      <div class="kv"><span class="k">eol</span><span class="v">Dec 2028</span></div>
+      <div class="kv"><span class="k">guest arch</span><span class="v" data-fact="arch">x86_64</span></div>
+      <div class="kv"><span class="k">platform</span><span class="v">linux/amd64</span></div>
+      <div class="kv"><span class="k">runtime</span><span class="v">docker / podman</span></div>
+      <div class="kv"><span class="k">accel</span><span class="v">kvm-if-present, else tcg</span></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel__head">
+        <span class="panel__id">[*]</span>
+        <h2 style="font-size:1.05rem"><span class="prefix">&gt;</span> build status</h2>
+      </div>
+      <div class="kv"><span class="k">foundation</span><span class="v"><span class="badge badge--ok" data-status="foundation">OK</span></span></div>
+      <div class="kv"><span class="k">harness</span><span class="v"><span class="badge badge--ok" data-status="harness">OK</span></span></div>
+      <div class="kv"><span class="k">scripts bash -n</span><span class="v"><span class="badge badge--ok" data-status="scripts">OK</span></span></div>
+      <div class="kv"><span class="k">sha256 pin</span><span class="v"><span class="badge badge--warn" data-status="sha256">PENDING</span></span></div>
+      <div class="kv"><span class="k">kernel build</span><span class="v"><span class="badge badge--warn" data-status="kernel">PENDING</span></span></div>
+      <div class="kv"><span class="k">lesson green</span><span class="v"><span class="badge badge--warn" data-status="lessons">PENDING</span></span></div>
+      <p class="foot" style="margin-top:var(--space-md)"><span data-generated>not generated yet &mdash; run <code>make status</code></span> &middot; PENDING items need colima up + a first build.</p>
+    </section>
+
+    <section class="panel">
+      <div class="panel__head">
+        <span class="panel__id">[*]</span>
+        <h2 style="font-size:1.05rem"><span class="prefix">$</span> actions</h2>
+      </div>
+      <div class="stack">
+        <a class="btn" href="01-syscall-is-the-door/index.html">START LESSON 01</a>
+        <a class="btn btn--dim" href="DESIGN.md">READ THE DESIGN</a>
+      </div>
+    </section>
+  </aside>
+
+</div>
+
+<!-- Live status: overlays the committed defaults above with real build state from
+     the gitignored, make-generated assets/status.js. Absent on a fresh clone (the
+     honest 'pending' defaults stand) until `make status` / a build runs. -->
+<script src="assets/status.js"></script>
+<script>
+(function () {
+  var s = window.KA_STATUS;
+  if (!s) return;                       // no generated status yet — keep defaults
+  function setBadge(key, b) {
+    if (!b) return;
+    var el = document.querySelector('[data-status="' + key + '"]');
+    if (!el) return;
+    el.className = 'badge badge--' + (b.kind || 'info');
+    el.textContent = b.label;
+  }
+  if (s.markers) for (var k in s.markers) setBadge(k, s.markers[k]);
+  if (s.facts) for (var f in s.facts) {
+    var fe = document.querySelector('[data-fact="' + f + '"]');
+    if (fe) fe.textContent = s.facts[f];
+  }
+  if (s.statusline) {
+    var sl = document.querySelector('[data-status-line]');
+    if (sl) sl.textContent = s.statusline;
+  }
+  if (s.generatedAt) {
+    var g = document.querySelector('[data-generated]');
+    if (g) g.textContent = 'live status @ ' + s.generatedAt;
+  }
+})();
+</script>
+</body>
+</html>

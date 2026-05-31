@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>02 // printk and the ring buffer</title>
+<meta name="description" content="Build a loadable module, watch the kernel log ring buffer fill, and see the console filter at work.">
+<!-- IBM Plex Mono self-hosted via @font-face in crt.css -->
+<link rel="stylesheet" href="../assets/crt.css">
+</head>
+<body>
+<div class="app">
+
+  <header class="statusline">
+    <span class="live"><span class="prefix">&gt;</span> lesson 02 // printk and the ring buffer<span class="cursor" aria-hidden="true"></span></span>
+    <span class="meta">[ modules to start ]</span>
+  </header>
+
+  <nav class="rail" aria-label="Sections">
+    <span class="label">./lesson 02</span>
+    <nav>
+      <a class="navlink" href="#mystery" aria-current="true">the mystery</a>
+      <a class="navlink" href="#observe">observe</a>
+      <a class="navlink" href="#read">read</a>
+      <a class="navlink" href="#touch">touch</a>
+      <a class="navlink" href="#verify">verify</a>
+      <a class="navlink" href="#explore">exploration</a>
+    </nav>
+    <span class="label" style="margin-top:var(--space-lg)">./source</span>
+    <nav>
+      <a class="navlink" href="../index.html">&larr; command index</a>
+      <a class="navlink" href="README.md">README.md</a>
+      <a class="navlink" href="module/hello.c">module/hello.c</a>
+      <a class="navlink" href="check.sh">check.sh</a>
+    </nav>
+  </nav>
+
+  <main class="workspace">
+
+    <section class="panel panel--hero" id="mystery">
+      <h1><span class="prefix">$</span> 02 ./printk-and-the-ring-buffer</h1>
+      <p class="tagline">build the thing that narrates the kernel</p>
+      <p><code>dmesg</code> prints kernel messages. But where do they come from, where do
+        they <em>live</em>, and why do some hit the console while others appear only when
+        you ask? The answer is <code>printk</code> and the <strong>kernel log ring
+        buffer</strong> — and the thing you build here <em>is itself</em> an observability
+        mechanism. Every diagnosis later in this course reads this buffer.</p>
+      <p class="muted">No kernel rebuild this time. A <strong>loadable module</strong>
+        (<code>.ko</code>) is the gentle, fast loop: compile it against the kernel tree,
+        <code>insmod</code> it, watch it talk, <code>rmmod</code> it.</p>
+    </section>
+
+    <section class="panel" id="observe">
+      <div class="panel__head"><span class="panel__id">[01]</span><h2><span class="prefix">./</span>OBSERVE &mdash; the tool shows it</h2></div>
+      <p>Run <code>dmesg -w</code> in one window and load a module in another — lines appear
+        the instant they're emitted. Each carries a <strong>log level</strong>, 0
+        (<code>KERN_EMERG</code>) to 7 (<code>KERN_DEBUG</code>).</p>
+    </section>
+
+    <section class="panel" id="read">
+      <div class="panel__head"><span class="panel__id">[02]</span><h2><span class="prefix">./</span>READ &mdash; the code explains it</h2></div>
+      <p><code>module/hello.c</code> emits exactly one line at each level:</p>
+<pre class="code" data-lang="c"><code>static int __init hello_init(void)
+{
+        pr_emerg ("kernel-apprentice: hello at EMERG (0)\n");
+        <span class="cm">/* ... alert, crit, err, warn, notice ... */</span>
+        pr_info  ("kernel-apprentice: hello at INFO  (6)\n");
+        pr_debug ("kernel-apprentice: hello at DEBUG (7)\n"); <span class="cm">/* see exploration */</span>
+        return 0;
+}
+module_init(hello_init);
+module_exit(hello_exit);</code></pre>
+      <p class="muted"><code>pr_emerg</code>/<code>pr_info</code>/… are thin wrappers over
+        <code>printk</code> that stamp the level. <code>module_init</code>/<code>module_exit</code>
+        register the load/unload hooks. Read the whole file — it's short, and it's a
+        complete, real kernel module.</p>
+    </section>
+
+    <section class="panel" id="touch">
+      <div class="panel__head"><span class="panel__id">[03]</span><h2><span class="prefix">./</span>TOUCH &mdash; load it and watch</h2></div>
+      <div class="term"><div class="line cmd">make check LESSON=02-printk-and-ring-buffer</div></div>
+      <p style="margin-top:var(--space-md)">The harness builds <code>hello.ko</code> against
+        the pinned kernel tree, boots a guest, then the guest's <code>/init</code>:</p>
+<pre class="code" data-lang="sh"><code>insmod /hello.ko          <span class="cm"># hello_init runs -&gt; 8 printk lines hit the ring buffer</span>
+dmesg | grep kernel-apprentice
+rmmod hello               <span class="cm"># hello_exit runs -&gt; "goodbye"</span></code></pre>
+    </section>
+
+    <section class="panel" id="verify">
+      <div class="panel__head"><span class="panel__id">[04]</span><h2><span class="prefix">$</span> VERIFY</h2></div>
+      <p>Green when the serial log contains <em>both</em>:</p>
+      <ul>
+        <li><code>kernel-apprentice: hello at INFO</code> — emitted into the ring buffer <span class="badge badge--ok">LOAD</span></li>
+        <li><code>kernel-apprentice: goodbye</code> — the <code>__exit</code> path ran <span class="badge badge--ok">UNLOAD</span></li>
+      </ul>
+    </section>
+
+    <section class="panel panel--warn" id="explore">
+      <div class="panel__head"><span class="panel__id">[05]</span><h2><span class="prefix">./</span>EXPLORATION &mdash; drive it yourself</h2></div>
+      <p><strong>The console filter.</strong> <code>dmesg</code> shows all eight… but did all
+        eight reach the serial console as the module loaded? The console only prints
+        messages more urgent than <code>console_loglevel</code>. Lower it:</p>
+<pre class="code" data-lang="sh"><code>cat /proc/sys/kernel/printk        <span class="cm"># console_loglevel is the first number</span>
+echo 1 &gt; /proc/sys/kernel/printk   <span class="cm"># now only EMERG/ALERT reach the console</span></code></pre>
+      <p>Re-load the module: fewer lines on the console, but <code>dmesg</code> still has them
+        all. The <strong>ring buffer holds everything; the console is a filtered view</strong>
+        — which is why you <code>dmesg</code> after the fact instead of trusting what scrolled
+        past.</p>
+      <p class="muted"><strong>The debug line.</strong> <code>pr_debug</code> (level 7) is
+        silent unless dynamic debug is enabled for it. Why might a kernel be built that way?
+        When would you want it on in production?</p>
+    </section>
+
+  </main>
+
+  <aside class="diagnostics" aria-label="Lesson diagnostics">
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">./</span>diagnostics</h2></div>
+      <div class="kv"><span class="k">lesson</span><span class="v">02</span></div>
+      <div class="kv"><span class="k">arc</span><span class="v">apprentice</span></div>
+      <div class="kv"><span class="k">state</span><span class="v"><span class="badge badge--ok">WORKED</span></span></div>
+      <div class="kv"><span class="k">builds</span><span class="v">out-of-tree .ko</span></div>
+      <div class="kv"><span class="k">loop</span><span class="v">insmod / rmmod</span></div>
+    </section>
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">&gt;</span> pass markers</h2></div>
+      <div class="kv"><span class="k">load</span><span class="v">hello at INFO</span></div>
+      <div class="kv"><span class="k">unload</span><span class="v">goodbye</span></div>
+    </section>
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">$</span> next</h2></div>
+      <div class="stack">
+        <a class="btn" href="../wheel/works-on-my-laptop/index.html">WHEEL &rarr;</a>
+        <a class="btn btn--dim" href="../01-syscall-is-the-door/index.html">&larr; LESSON 01</a>
+      </div>
+    </section>
+  </aside>
+
+</div>
+</body>
+</html>

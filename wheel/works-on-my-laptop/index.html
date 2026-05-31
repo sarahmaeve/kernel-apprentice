@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WHL // works on my laptop</title>
+<meta name="description" content="Wheel of Misfortune: a live, broken box. Diagnose it and point at the evidence, not a guess.">
+<!-- IBM Plex Mono self-hosted via @font-face in crt.css -->
+<link rel="stylesheet" href="../../assets/crt.css">
+</head>
+<body>
+<div class="app">
+
+  <header class="statusline">
+    <span class="live"><span class="prefix">&gt;</span> wheel of misfortune // works on my laptop<span class="cursor" aria-hidden="true"></span></span>
+    <span class="meta">[ live fire &middot; symptom-first ]</span>
+  </header>
+
+  <nav class="rail" aria-label="Sections">
+    <span class="label">./scenario</span>
+    <nav>
+      <a class="navlink" href="#page" aria-current="true">the page</a>
+      <a class="navlink" href="#run">run</a>
+      <a class="navlink" href="#job">your job</a>
+      <a class="navlink" href="#hints">hints</a>
+      <a class="navlink" href="#postmortem">post-mortem</a>
+    </nav>
+    <span class="label" style="margin-top:var(--space-lg)">./source</span>
+    <nav>
+      <a class="navlink" href="../../index.html">&larr; command index</a>
+      <a class="navlink" href="README.md">README.md</a>
+      <a class="navlink" href="svc.c">svc.c</a>
+      <a class="navlink" href="check.sh">check.sh</a>
+    </nav>
+  </nav>
+
+  <main class="workspace">
+
+    <section class="panel panel--fail" id="page">
+      <h1><span class="prefix">$</span> WHL ./works-on-my-laptop</h1>
+      <p class="tagline" style="color:var(--error)">live fire &middot; the box is genuinely broken</p>
+      <p class="muted">You're paged with what production shows you and nothing more. The guest
+        is genuinely broken. Drive real tools; <strong>score on the evidence you point at,
+        not on guessing the cause.</strong></p>
+      <blockquote class="page" id="alert">
+        <p><strong>&#128223; PAGE.</strong> A new service, <code>svc</code>, refuses to start on
+          the prod-shaped box. It dies during startup with a cryptic message and a non-zero
+          exit. The developer swears <em>"it works on my laptop"</em> — and it does, every
+          time, on theirs.</p>
+        <p>Same binary. Same inputs. Different box. Find out <em>what the kernel is telling the
+          service</em>, and point at the evidence.</p>
+      </blockquote>
+      <p class="muted" style="margin:0">That's all you get. Don't open the post-mortem until
+        you've driven it.</p>
+    </section>
+
+    <section class="panel" id="run">
+      <div class="panel__head"><span class="panel__id">[01]</span><h2><span class="prefix">$</span> RUN THE SCENARIO</h2></div>
+      <div class="term"><div class="line cmd">make check LESSON=wheel/works-on-my-laptop</div></div>
+      <p class="muted" style="margin-top:var(--space-md)">This boots the broken guest and runs
+        <code>svc</code> under <code>strace</code> so you can watch the failure happen. The
+        same <code>svc</code> source is in this directory — but the bug isn't <em>in</em> the
+        source; it's in the environment the kernel hands it.</p>
+    </section>
+
+    <section class="panel" id="job">
+      <div class="panel__head"><span class="panel__id">[02]</span><h2><span class="prefix">./</span>YOUR JOB</h2></div>
+      <ol class="steps">
+        <li><strong>Reproduce &amp; read the symptom.</strong> What exactly does
+          <code>svc</code> print? What's its exit code?</li>
+        <li><strong>Go to the boundary.</strong> <code>strace</code> is already capturing the
+          run. Which syscall fails, and with which <strong>errno</strong>? An errno is the
+          kernel telling you precisely why the door wouldn't open.</li>
+        <li><strong>Corroborate from <code>/proc</code>.</strong> The errno points at a
+          <em>limit</em>. Where does the kernel expose the limits a process actually runs
+          under? Find the number that's too small.</li>
+        <li><strong>Point at the evidence.</strong> State it as: <em>"svc fails because syscall
+          X returns errno Y; <code>/proc/&lt;pid&gt;/limits</code> shows limit Z = N, lower than
+          it needs."</em> That — not naming a fix — is the win.</li>
+      </ol>
+    </section>
+
+    <section class="panel" id="hints">
+      <div class="panel__head"><span class="panel__id">[03]</span><h2><span class="prefix">./</span>GRADUATED HINTS</h2></div>
+      <details class="hint"><summary>what does the symptom look like?</summary>
+        <div class="hint__body"><p style="margin:0"><code>svc</code> warms a pool of file
+          descriptors on startup. The failure message is about that warmup. Read it
+          literally.</p></div>
+      </details>
+      <details class="hint"><summary>which syscall, which errno?</summary>
+        <div class="hint__body"><p style="margin:0">In the <code>strace</code> output, find the
+          first call that returns <code>-1</code>. The errno is <code>EMFILE</code> —
+          <em>"Too many open files."</em> A per-process resource ceiling, not a bug in the
+          code.</p></div>
+      </details>
+      <details class="hint"><summary>where the kernel shows the ceiling</summary>
+        <div class="hint__body">
+<pre class="code" data-lang="sh"><code>cat /proc/self/limits | grep 'open files'</code></pre>
+          <p style="margin:0">The <strong>soft limit</strong> on open files
+          (<code>RLIMIT_NOFILE</code>) is far lower here than on the laptop. The service needs
+          more descriptors than the box allows it.</p></div>
+      </details>
+    </section>
+
+    <section class="panel panel--warn" id="postmortem">
+      <div class="panel__head"><span class="panel__id">[04]</span><h2><span class="prefix">./</span>POST-MORTEM</h2></div>
+      <details class="hint"><summary>open after you've driven it &mdash; ground truth + the lesson</summary>
+        <div class="hint__body">
+          <p><strong>Ground truth.</strong> The guest boots with <code>RLIMIT_NOFILE</code> set
+            deliberately low (<code>ulimit -n 64</code>). <code>svc</code> tries to open a pool
+            of 256 descriptors; around the 64th, <code>open()</code> returns
+            <code>-1 EMFILE</code>. Nothing is wrong with the binary — the <em>environment</em>
+            differs from the laptop's generous default.</p>
+          <p><strong>Why it's the archetype.</strong> Novel software meets a production-shaped
+            box whose kernel-enforced limits differ from a dev laptop, and the failure only
+            makes sense once you read the errno at the syscall boundary and corroborate it in
+            <code>/proc</code>. No crash, no kernel bug — just the kernel quietly enforcing a
+            policy nobody checked.</p>
+          <p style="margin:0"><strong>What observability would have caught it faster.</strong> A
+            single <code>strace</code> at startup shows <code>openat(...) = -1 EMFILE</code>
+            immediately; <code>/proc/&lt;pid&gt;/limits</code> confirms the ceiling. The fix lives
+            outside this lesson (raise the limit) — but the <em>diagnosis</em>, the part that
+            transfers to every future incident, is what you just did.</p>
+        </div>
+      </details>
+      <p class="foot" style="margin-top:var(--space-md)"><code>check.sh</code> verifies the
+        scenario is correctly armed: the run reproduces the <code>EMFILE</code> failure and the
+        low limit is visible in <code>/proc</code>. A later facilitator layer will grade
+        <em>your</em> evidence.</p>
+    </section>
+
+  </main>
+
+  <aside class="diagnostics" aria-label="Scenario diagnostics">
+    <section class="panel panel--fail">
+      <div class="panel__head"><span class="panel__id">[!]</span><h2 style="font-size:1.05rem"><span class="prefix">&gt;</span> system fault</h2></div>
+      <div class="kv"><span class="k">scenario</span><span class="v">works-on-my-laptop</span></div>
+      <div class="kv"><span class="k">tier</span><span class="v">basic</span></div>
+      <div class="kv"><span class="k">state</span><span class="v"><span class="badge badge--fail">LIVE FIRE</span></span></div>
+      <div class="kv"><span class="k">fault</span><span class="v">RLIMIT_NOFILE = 64</span></div>
+      <div class="kv"><span class="k">surface</span><span class="v">syscall &middot; /proc</span></div>
+    </section>
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">&gt;</span> armed markers</h2></div>
+      <div class="kv"><span class="k">symptom</span><span class="v">EMFILE</span></div>
+      <div class="kv"><span class="k">evidence</span><span class="v">Max open files</span></div>
+    </section>
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">$</span> next</h2></div>
+      <div class="stack">
+        <a class="btn btn--dim" href="../../02-printk-and-ring-buffer/index.html">&larr; LESSON 02</a>
+        <a class="btn btn--dim" href="../../index.html">COMMAND INDEX</a>
+      </div>
+    </section>
+  </aside>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,335 @@
+/* =============================================================================
+   CRT Phosphor Command Interface — stylesheet for kernel-apprentice docs.
+   Implements the design language in /tmp/crt-phosphor-command-interface-DESIGN.md:
+   green-on-black glass terminal, IBM Plex Mono, zero-radius square panels,
+   scanline + grid + vignette overlays, command-prompt grammar, semantic state
+   colors (amber=warn, red=fail, cyan=info). Reusable across lesson pages.
+   ============================================================================= */
+
+/* ---- Self-hosted IBM Plex Mono (OFL-1.1; see fonts/LICENSE.txt) ---------- */
+@font-face {
+  font-family:'IBM Plex Mono'; font-style:normal; font-weight:400; font-display:swap;
+  src:url('fonts/ibm-plex-mono-latin-400-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family:'IBM Plex Mono'; font-style:normal; font-weight:600; font-display:swap;
+  src:url('fonts/ibm-plex-mono-latin-600-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family:'IBM Plex Mono'; font-style:normal; font-weight:700; font-display:swap;
+  src:url('fonts/ibm-plex-mono-latin-700-normal.woff2') format('woff2');
+}
+
+/* ---- Design tokens (normative palette + scale) -------------------------- */
+:root {
+  --accent:#FFB000;  --amber-dim:#8A5E00; --background:#020403; --blackout:#000000;
+  --border:#168A45;  --error:#FF3B30;     --grid:#0B3A1D;       --info:#40CFFF;
+  --muted:#5D8F6C;   --panel-deep:#031007; --panel-lift:#092012;
+  --phosphor-dim:#7CFF9A; --primary:#00FF66; --red-dim:#611515; --secondary:#39FF14;
+  --success:#00D084; --surface:#07110B;    --text:#C8FFD8;      --warning:#FFB000;
+
+  --space-xs:4px; --space-sm:8px; --space-md:12px; --space-lg:16px;
+  --space-xl:24px; --space-2xl:32px; --space-3xl:48px; --space-4xl:64px;
+
+  --shadow-sm:0 0 10px rgba(0,255,102,0.18);
+  --shadow-md:0 0 22px rgba(0,255,102,0.20), inset 0 0 18px rgba(0,255,102,0.05);
+  --shadow-lg:0 0 48px rgba(0,255,102,0.22), inset 0 0 32px rgba(0,255,102,0.08);
+
+  --frame:inset 0 0 0 1px rgba(57,255,20,0.14);  /* doubled terminal-frame look */
+  --glow-text:0 0 8px rgba(0,255,102,0.40);
+
+  --font-mono:'IBM Plex Mono','SFMono-Regular',Menlo,Consolas,'Liberation Mono',monospace;
+}
+
+/* ---- Reset + base ------------------------------------------------------- */
+*,*::before,*::after { box-sizing:border-box; }
+html { -webkit-text-size-adjust:100%; }
+body {
+  margin:0;
+  min-height:100vh;
+  font-family:var(--font-mono);
+  font-size:16px;
+  line-height:1.45;
+  letter-spacing:0.01em;
+  color:var(--text);
+  background-color:var(--background);
+  /* faint 24px technical grid */
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size:24px 24px, 24px 24px;
+  background-position:-1px -1px, -1px -1px;
+  background-attachment:fixed;
+  text-rendering:optimizeLegibility;
+}
+
+/* Scanlines + vignette as full-screen, non-interactive glass overlays. */
+body::before {            /* scanlines */
+  content:""; position:fixed; inset:0; pointer-events:none; z-index:2;
+  background:repeating-linear-gradient(
+    to bottom,
+    rgba(0,0,0,0.16) 0, rgba(0,0,0,0.16) 1px,
+    transparent 1px, transparent 3px);
+  mix-blend-mode:multiply;
+}
+body::after {             /* vignette */
+  content:""; position:fixed; inset:0; pointer-events:none; z-index:3;
+  background:radial-gradient(ellipse at center, transparent 52%, rgba(0,0,0,0.60) 100%);
+}
+
+::selection { background:var(--primary); color:#000; }
+
+/* ---- Typography --------------------------------------------------------- */
+h1,h2,h3 { font-family:var(--font-mono); margin:0; text-shadow:var(--glow-text); }
+h1 { font-size:1.728rem; font-weight:700; line-height:1.1; }
+h2 { font-size:1.44rem;  font-weight:600; line-height:1.15; }
+h3 { font-size:1.05rem;  font-weight:600; line-height:1.2; text-transform:uppercase; letter-spacing:0.04em; }
+p  { margin:0 0 var(--space-md); }
+strong { color:var(--phosphor-dim); font-weight:600; }
+code { font-family:var(--font-mono); color:var(--secondary); }
+.muted { color:var(--muted); }
+.dim   { color:var(--phosphor-dim); }
+.amber { color:var(--warning); }
+.cyan  { color:var(--info); }
+
+/* The label-md token: small uppercase tracked labels. */
+.label { font-size:0.75rem; font-weight:600; line-height:1; letter-spacing:0.08em;
+         text-transform:uppercase; color:var(--muted); }
+
+/* Command-prompt prefixes rendered as glowing markers. */
+.prefix { color:var(--secondary); text-shadow:var(--glow-text); }
+
+/* Blinking block cursor — the "system is alive" motif. */
+.cursor {
+  display:inline-block; width:0.55em; height:1.05em; margin-left:2px;
+  background:var(--primary); box-shadow:var(--shadow-sm);
+  vertical-align:-0.18em; animation:blink 1.05s steps(1) infinite;
+}
+@keyframes blink { 0%,50%{opacity:1;} 50.01%,100%{opacity:0;} }
+
+/* ---- Links + buttons ---------------------------------------------------- */
+a { color:var(--info); text-decoration:none; border-bottom:1px dotted rgba(64,207,255,0.45); }
+a:hover { color:#9fe9ff; border-bottom-color:var(--info); }
+a:focus-visible, .btn:focus-visible, .navlink:focus-visible {
+  outline:2px solid var(--secondary); outline-offset:2px;
+}
+
+.btn {
+  display:inline-flex; align-items:center; gap:var(--space-sm);
+  min-height:44px; padding:0 var(--space-lg);
+  border:1px solid var(--primary); background:transparent; color:var(--primary);
+  font:600 0.75rem/1 var(--font-mono); letter-spacing:0.08em; text-transform:uppercase;
+  box-shadow:var(--shadow-sm); cursor:pointer; text-decoration:none;
+  transition:background .12s linear, color .12s linear;
+}
+.btn:hover { background:var(--primary); color:#000; border-bottom-color:var(--primary); }
+.btn--dim { border-color:var(--border); color:var(--phosphor-dim); box-shadow:none; }
+.btn--dim:hover { background:var(--panel-lift); color:var(--text); }
+
+/* ---- Layout: the command center ----------------------------------------- */
+.app {
+  display:grid; gap:var(--space-xl);
+  grid-template-columns:220px minmax(0,1fr) 320px;
+  grid-template-areas:"status status status" "rail main diag";
+  max-width:1440px; margin:0 auto; padding:var(--space-xl);
+  position:relative; z-index:1;
+}
+.statusline { grid-area:status; }
+.rail { grid-area:rail; }
+.workspace { grid-area:main; min-width:0; }
+.diagnostics { grid-area:diag; }
+@media (min-width:1024px) {
+  .rail, .diagnostics { position:sticky; top:var(--space-xl); align-self:start; }
+}
+
+/* ---- Status line (top prompt bar) --------------------------------------- */
+.statusline {
+  display:flex; flex-wrap:wrap; align-items:center; gap:var(--space-md);
+  justify-content:space-between;
+  padding:var(--space-md) var(--space-lg);
+  background:var(--surface); border:1px solid var(--border);
+  box-shadow:var(--shadow-sm), var(--frame);
+}
+.statusline .live { color:var(--phosphor-dim); }
+.statusline .meta { color:var(--muted); }
+
+/* ---- Panels (terminal viewports) ---------------------------------------- */
+.panel {
+  background:var(--surface);
+  border:1px solid var(--border);
+  box-shadow:var(--shadow-md), var(--frame);
+  padding:var(--space-lg);
+  margin-bottom:var(--space-xl);
+}
+.panel__head {
+  display:flex; align-items:baseline; gap:var(--space-sm);
+  padding-bottom:var(--space-md); margin-bottom:var(--space-md);
+  border-bottom:1px solid var(--grid);
+}
+.panel__id { color:var(--muted); font-size:0.8rem; }
+.panel--warn { border-color:var(--warning); box-shadow:0 0 22px rgba(255,176,0,0.16), inset 0 0 0 1px rgba(255,176,0,0.14); }
+.panel--warn h2, .panel--warn h3 { color:var(--warning); text-shadow:0 0 8px rgba(255,176,0,0.4); }
+.panel--hero { box-shadow:var(--shadow-lg), var(--frame); }
+.panel--hero h1 .prefix { font-size:1.2rem; }
+.tagline { color:var(--secondary); text-transform:uppercase; letter-spacing:0.06em;
+           font-size:0.8rem; margin:var(--space-sm) 0 var(--space-md); }
+
+/* ---- Generic helpers ---------------------------------------------------- */
+.stack > * + * { margin-top:var(--space-md); }
+.grid-2 { display:grid; gap:var(--space-lg); grid-template-columns:repeat(2,minmax(0,1fr)); }
+.grid-3 { display:grid; gap:var(--space-lg); grid-template-columns:repeat(3,minmax(0,1fr)); }
+@media (max-width:639px){ .grid-2,.grid-3 { grid-template-columns:1fr; } }
+
+.cell {
+  border:1px solid var(--grid); background:var(--panel-deep);
+  padding:var(--space-md); box-shadow:var(--frame);
+}
+.cell h3 { color:var(--primary); margin-bottom:var(--space-sm); }
+
+/* ---- Callout (the load-bearing distinction) ----------------------------- */
+.callout {
+  border-left:2px solid var(--accent); background:var(--panel-lift);
+  padding:var(--space-md) var(--space-lg); color:var(--phosphor-dim);
+}
+.callout strong { color:var(--accent); }
+
+/* ---- Badges (with non-color labels for a11y) ---------------------------- */
+.badge {
+  display:inline-block; padding:2px 8px; border:1px solid currentColor;
+  font-size:0.7rem; font-weight:600; letter-spacing:0.08em; text-transform:uppercase;
+  line-height:1.4; white-space:nowrap;
+}
+.badge--ok   { color:var(--success); }
+.badge--warn { color:var(--warning); }
+.badge--fail { color:var(--error); }
+.badge--info { color:var(--info); }
+
+/* ---- Terminal block (quickstart commands) ------------------------------- */
+.term {
+  background:var(--panel-deep); border:1px solid var(--border);
+  box-shadow:var(--frame); padding:var(--space-lg); overflow-x:auto;
+  font-size:0.9rem; line-height:1.7;
+}
+.term .line { white-space:pre; }
+.term .cmd::before { content:"$ "; color:var(--accent); }
+.term .cmd { color:var(--text); }
+.term .cmt { color:var(--muted); }
+.term .out { color:var(--phosphor-dim); }
+
+/* ---- Tables ------------------------------------------------------------- */
+.table-wrap { overflow-x:auto; }
+table { width:100%; border-collapse:collapse; font-size:0.88rem; }
+caption { text-align:left; color:var(--muted); padding-bottom:var(--space-sm); }
+th, td { text-align:left; padding:var(--space-sm) var(--space-md);
+         border:1px solid var(--grid); vertical-align:top; }
+thead th { color:var(--primary); text-transform:uppercase; letter-spacing:0.06em;
+           font-size:0.72rem; background:var(--panel-deep); }
+tbody tr:hover { background:var(--panel-lift); }
+
+/* ---- Diagnostics key/value rows ----------------------------------------- */
+.kv { display:flex; align-items:center; justify-content:space-between; gap:var(--space-md);
+      padding:var(--space-sm) 0; border-bottom:1px solid var(--grid); }
+.kv:last-child { border-bottom:0; }
+.kv .k { color:var(--muted); font-size:0.78rem; letter-spacing:0.04em; text-transform:uppercase; }
+.kv .v { color:var(--text); text-align:right; }
+
+/* ---- Left rail navigation ----------------------------------------------- */
+.rail nav { display:flex; flex-direction:column; gap:2px; }
+.navlink {
+  display:block; padding:var(--space-sm) var(--space-md);
+  color:var(--phosphor-dim); border:1px solid transparent; border-bottom:0;
+  text-decoration:none; font-size:0.85rem;
+}
+.navlink::before { content:"> "; color:var(--secondary); }
+.navlink:hover, .navlink[aria-current="true"] {
+  color:var(--primary); border-color:var(--border); background:var(--panel-lift);
+  box-shadow:var(--shadow-sm);
+}
+.rail .label { padding:var(--space-md) var(--space-md) var(--space-sm); display:block; }
+
+/* ---- Footer ------------------------------------------------------------- */
+.foot { color:var(--muted); font-size:0.8rem; padding-top:var(--space-md);
+        border-top:1px solid var(--grid); margin-top:var(--space-md); }
+
+/* ---- Responsive collapse ------------------------------------------------ */
+@media (max-width:1023px){
+  .app { grid-template-columns:1fr; grid-template-areas:"status" "rail" "main" "diag"; }
+  .rail nav { flex-direction:row; flex-wrap:wrap; }
+  .navlink { border:1px solid var(--border); }
+}
+
+/* ---- Reduced motion ----------------------------------------------------- */
+@media (prefers-reduced-motion:reduce){
+  .cursor { animation:none; }
+  * { transition:none !important; }
+}
+
+/* =============================================================================
+   Lesson-page components (used by per-lesson index.html pages)
+   ============================================================================= */
+
+/* ---- Code blocks (multi-line source) ------------------------------------ */
+pre.code {
+  position:relative; margin:0 0 var(--space-md); padding:var(--space-lg);
+  background:var(--panel-deep); border:1px solid var(--border); box-shadow:var(--frame);
+  overflow-x:auto; font-size:0.85rem; line-height:1.6; color:var(--phosphor-dim);
+}
+pre.code[data-lang]::before {
+  content:"[ " attr(data-lang) " ]"; position:absolute; top:0; right:0;
+  padding:2px 8px; font-size:0.65rem; letter-spacing:0.08em; color:var(--muted);
+  background:var(--surface); border-left:1px solid var(--grid); border-bottom:1px solid var(--grid);
+}
+pre.code code { color:inherit; font-size:inherit; }
+pre.code .cm  { color:var(--muted); }            /* comment            */
+pre.code .add { color:var(--success); }          /* a line you add     */
+pre.code .add::before { content:"+ "; color:var(--success); }
+
+/* ---- The "page" / alert quote (symptom-first) --------------------------- */
+blockquote.page {
+  margin:0 0 var(--space-md); padding:var(--space-md) var(--space-lg);
+  border:1px solid var(--warning); border-left-width:2px;
+  background:var(--panel-lift); color:var(--phosphor-dim);
+  box-shadow:0 0 18px rgba(255,176,0,0.12);
+}
+blockquote.page p { margin:0 0 var(--space-sm); }
+blockquote.page p:last-child { margin:0; }
+
+/* ---- Collapsible graduated hints ---------------------------------------- */
+details.hint {
+  margin-bottom:var(--space-sm);
+  background:var(--panel-deep); border:1px solid var(--border); box-shadow:var(--frame);
+}
+details.hint > summary {
+  cursor:pointer; list-style:none; user-select:none;
+  padding:var(--space-sm) var(--space-md);
+  color:var(--primary); font-weight:600; font-size:0.85rem;
+}
+details.hint > summary::-webkit-details-marker { display:none; }
+details.hint > summary::before { content:"[+] "; color:var(--secondary); }
+details.hint[open] > summary::before { content:"[\2212] "; }
+details.hint[open] > summary { border-bottom:1px solid var(--grid); }
+details.hint > summary:hover { background:var(--panel-lift); }
+details.hint .hint__body { padding:var(--space-md); color:var(--phosphor-dim); }
+details.hint .hint__body > :last-child { margin-bottom:0; }
+
+/* ---- Failed / live-fire panel variant ----------------------------------- */
+.panel--fail { border-color:var(--error);
+  box-shadow:0 0 22px rgba(255,59,48,0.16), inset 0 0 0 1px rgba(255,59,48,0.14); }
+.panel--fail h1, .panel--fail h2 { color:var(--error); text-shadow:0 0 8px rgba(255,59,48,0.40); }
+
+/* ---- Ordered steps (bracketed terminal counters) ------------------------ */
+ol.steps { margin:0; padding:0; list-style:none; counter-reset:step; }
+ol.steps > li {
+  position:relative; padding:var(--space-sm) 0 var(--space-sm) 2.6em;
+  border-bottom:1px solid var(--grid);
+}
+ol.steps > li:last-child { border-bottom:0; }
+ol.steps > li::before {
+  counter-increment:step; content:"[" counter(step,decimal-leading-zero) "]";
+  position:absolute; left:0; top:var(--space-sm); color:var(--secondary); font-weight:600;
+}
+
+/* ---- Plain prose lists inside panels ------------------------------------ */
+.panel ul:not(.reset) { margin:0 0 var(--space-md); padding-left:1.3em; }
+.panel ul:not(.reset) li { margin:var(--space-xs) 0; }
+.panel ul:not(.reset) li::marker { color:var(--secondary); }

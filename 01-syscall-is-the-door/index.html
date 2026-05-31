@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>01 // the syscall is the door</title>
+<meta name="description" content="Find the function behind getpid() and prove it ran. One event, three views.">
+<!-- IBM Plex Mono self-hosted via @font-face in crt.css -->
+<link rel="stylesheet" href="../assets/crt.css">
+</head>
+<body>
+<div class="app">
+
+  <header class="statusline">
+    <span class="live"><span class="prefix">&gt;</span> lesson 01 // the syscall is the door<span class="cursor" aria-hidden="true"></span></span>
+    <span class="meta">[ observe &middot; read &middot; touch ]</span>
+  </header>
+
+  <nav class="rail" aria-label="Sections">
+    <span class="label">./lesson 01</span>
+    <nav>
+      <a class="navlink" href="#mystery" aria-current="true">the mystery</a>
+      <a class="navlink" href="#observe">observe</a>
+      <a class="navlink" href="#read">read</a>
+      <a class="navlink" href="#touch">touch</a>
+      <a class="navlink" href="#verify">verify</a>
+      <a class="navlink" href="#hints">hints</a>
+    </nav>
+    <span class="label" style="margin-top:var(--space-lg)">./source</span>
+    <nav>
+      <a class="navlink" href="../index.html">&larr; command index</a>
+      <a class="navlink" href="README.md">README.md</a>
+      <a class="navlink" href="door.c">door.c</a>
+      <a class="navlink" href="check.sh">check.sh</a>
+    </nav>
+  </nav>
+
+  <main class="workspace">
+
+    <section class="panel panel--hero" id="mystery">
+      <h1><span class="prefix">$</span> 01 ./the-syscall-is-the-door</h1>
+      <p class="tagline">one event &middot; three views</p>
+      <p>Every interaction between your software and the kernel goes through one
+        narrow door: the <strong>syscall</strong>. You call a libc function, it traps
+        into the kernel, a specific C function runs, you get an answer back. That door
+        is where almost every "novel software behaves badly on the real box" problem
+        lives.</p>
+      <p class="muted">The challenge: <em>make a specific line of kernel code announce
+        itself in <code>dmesg</code>, firing exactly when — and only when — our test
+        program calls <code>getpid()</code>.</em></p>
+      <p>There's a small program here, <code>door.c</code>. All it does is ask the
+        kernel for its PID and print it:</p>
+<pre class="code" data-lang="c"><code>pid_t p = getpid();           <span class="cm">/* the door: traps into SYSCALL_DEFINE0(getpid) */</span>
+printf("door: my pid is %d\n", (int)p);</code></pre>
+    </section>
+
+    <section class="panel" id="observe">
+      <div class="panel__head"><span class="panel__id">[01]</span><h2><span class="prefix">./</span>OBSERVE &mdash; the tool shows it</h2></div>
+      <p><code>check.sh</code> runs <code>door</code> under <code>strace</code> inside the
+        guest. You see the boundary crossing in the output:</p>
+<pre class="code" data-lang="strace"><code>getpid()  = 42</code></pre>
+      <p class="muted"><code>strace</code> sits at the door and logs everyone who walks
+        through. That's view one.</p>
+    </section>
+
+    <section class="panel" id="read">
+      <div class="panel__head"><span class="panel__id">[02]</span><h2><span class="prefix">./</span>READ &mdash; the code explains it</h2></div>
+      <p>On the kernel side, <code>getpid()</code> is a tiny function. In the pinned
+        source (<code>harness/.build/linux-6.18.33/</code>), open
+        <strong>kernel/sys.c</strong> and find:</p>
+<pre class="code" data-lang="c"><code>SYSCALL_DEFINE0(getpid)
+{
+        return task_tgid_vnr(current);
+}</code></pre>
+      <p class="muted"><code>SYSCALL_DEFINE0</code> defines a syscall taking 0 arguments.
+        <code>current</code> is the running task; <code>task_tgid_vnr</code> returns its
+        PID as seen from the task's namespace. That's the whole door for
+        <code>getpid</code> — view two.</p>
+    </section>
+
+    <section class="panel" id="touch">
+      <div class="panel__head"><span class="panel__id">[03]</span><h2><span class="prefix">./</span>TOUCH &mdash; your printk confirms it</h2></div>
+      <p>Reach in. Announce the handler — but only for <em>our</em> process, so we don't
+        drown the log (every program calls <code>getpid</code>; a blind printk here floods
+        — which is exactly why later lessons reach for dynamic tracing instead).</p>
+<pre class="code" data-lang="c"><code>SYSCALL_DEFINE0(getpid)
+{
+<span class="add">        if (!strcmp(current->comm, "door"))</span>
+<span class="add">                pr_info("kernel-apprentice: getpid by %s pid=%d\n",</span>
+<span class="add">                        current->comm, task_tgid_vnr(current));</span>
+        return task_tgid_vnr(current);
+}</code></pre>
+      <p>Then from the repo root:</p>
+      <div class="term"><div class="line cmd">make check LESSON=01-syscall-is-the-door</div></div>
+      <p class="muted" style="margin-top:var(--space-md)">The harness does an
+        <strong>incremental</strong> rebuild (seconds), boots the guest, runs
+        <code>door</code> under <code>strace</code>, and greps the kernel log. That's view
+        three — proof that exact line ran.</p>
+    </section>
+
+    <section class="panel" id="verify">
+      <div class="panel__head"><span class="panel__id">[04]</span><h2><span class="prefix">$</span> VERIFY</h2></div>
+      <p>Green only when the serial log contains <em>both</em>:</p>
+      <ul>
+        <li><code>getpid(</code> — the boundary, observed by strace, <span class="badge badge--info">VIEW 1</span></li>
+        <li><code>kernel-apprentice: getpid by door</code> — your line of kernel C, fired <span class="badge badge--ok">VIEW 3</span></li>
+      </ul>
+      <p class="muted">Compare the PID in the <code>strace</code> line with <code>pid=</code> in
+        your printk. Same number. The door, the function behind it, and proof it ran.</p>
+    </section>
+
+    <section class="panel" id="hints">
+      <div class="panel__head"><span class="panel__id">[05]</span><h2><span class="prefix">./</span>GRADUATED HINTS</h2></div>
+      <details class="hint"><summary>where does getpid live?</summary>
+        <div class="hint__body"><pre class="code"><code>grep -rn "SYSCALL_DEFINE0(getpid)" harness/.build/linux-6.18.33/kernel/</code></pre></div>
+      </details>
+      <details class="hint"><summary>why guard on the process name?</summary>
+        <div class="hint__body"><p style="margin:0">Every process calls <code>getpid</code>
+          constantly. An unconditional <code>printk</code> floods the ring buffer and
+          console. <code>current-&gt;comm</code> is the current task's command name
+          (<code>"door"</code>), so guarding on it keeps the log clean.</p></div>
+      </details>
+      <details class="hint"><summary>the exact edit</summary>
+        <div class="hint__body"><p style="margin:0">In <code>kernel/sys.c</code>, replace the
+          body of <code>SYSCALL_DEFINE0(getpid)</code> with the guarded <code>pr_info</code>
+          in the <strong>TOUCH</strong> section above. <code>strcmp</code>,
+          <code>current</code>, <code>pr_info</code>, and <code>task_tgid_vnr</code> are all
+          already available in that file — no new includes.</p></div>
+      </details>
+      <p class="foot">If you can find the function behind a syscall and prove it ran, you can
+        do it for any boundary your software crosses. Everything after this is the same
+        move against a bigger door.</p>
+    </section>
+
+  </main>
+
+  <aside class="diagnostics" aria-label="Lesson diagnostics">
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">./</span>diagnostics</h2></div>
+      <div class="kv"><span class="k">lesson</span><span class="v">01</span></div>
+      <div class="kv"><span class="k">arc</span><span class="v">apprentice</span></div>
+      <div class="kv"><span class="k">state</span><span class="v"><span class="badge badge--warn">CHALLENGE</span></span></div>
+      <div class="kv"><span class="k">method</span><span class="v">observe&middot;read&middot;touch</span></div>
+      <div class="kv"><span class="k">touches</span><span class="v">kernel/sys.c</span></div>
+      <div class="kv"><span class="k">loop</span><span class="v">kernel rebuild (incr.)</span></div>
+    </section>
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">&gt;</span> pass markers</h2></div>
+      <div class="kv"><span class="k">view 1</span><span class="v">getpid(</span></div>
+      <div class="kv"><span class="k">view 3</span><span class="v">getpid by door</span></div>
+    </section>
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">$</span> next</h2></div>
+      <div class="stack">
+        <a class="btn" href="../02-printk-and-ring-buffer/index.html">LESSON 02 &rarr;</a>
+        <a class="btn btn--dim" href="../index.html">COMMAND INDEX</a>
+      </div>
+    </section>
+  </aside>
+
+</div>
+</body>
+</html>
