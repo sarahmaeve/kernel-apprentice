@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WHL // mystery OOM kill</title>
+<meta name="description" content="Wheel of Misfortune: a service keeps getting OOM-killed. Read the OOM report, point at the cgroup limit.">
+<!-- IBM Plex Mono self-hosted via @font-face in crt.css -->
+<link rel="stylesheet" href="../../assets/crt.css">
+</head>
+<body>
+<div class="app">
+
+  <header class="statusline">
+    <span class="live"><span class="prefix">&gt;</span> wheel of misfortune // mystery OOM kill<span class="cursor" aria-hidden="true"></span></span>
+    <span class="meta">[ live fire &middot; symptom-first ]</span>
+  </header>
+
+  <nav class="rail" aria-label="Sections">
+    <span class="label">./scenario</span>
+    <nav>
+      <a class="navlink" href="#page" aria-current="true">the page</a>
+      <a class="navlink" href="#run">run</a>
+      <a class="navlink" href="#job">your job</a>
+      <a class="navlink" href="#read">read the report</a>
+      <a class="navlink" href="#hints">hints</a>
+      <a class="navlink" href="#postmortem">post-mortem</a>
+      <a class="navlink" href="#further">further reading</a>
+    </nav>
+    <span class="label" style="margin-top:var(--space-lg)">./source</span>
+    <nav>
+      <a class="navlink" href="../../index.html">&larr; command index</a>
+      <a class="navlink" href="README.md">README.md</a>
+      <a class="navlink" href="hog.c">hog.c</a>
+      <a class="navlink" href="check.sh">check.sh</a>
+    </nav>
+  </nav>
+
+  <main class="workspace">
+
+    <section class="panel panel--fail" id="page">
+      <h1><span class="prefix">$</span> WHL ./mystery-oom-kill</h1>
+      <p class="tagline" style="color:var(--error)">live fire &middot; the service keeps dying</p>
+      <p class="muted">You're paged with what production shows you and nothing more. Drive real
+        tools; <strong>score on the evidence you point at, not on a guess.</strong></p>
+      <blockquote class="page" id="alert">
+        <p><strong>&#128223; PAGE.</strong> A service, <code>svc</code>, keeps <strong>dying under
+          load</strong> — no crash, no error in its own logs, it's just <em>gone</em>, and the
+          supervisor restarts it in a loop.</p>
+        <p>It runs fine on a smaller workload, and fine on the dev laptop. Same binary, same inputs.
+          Something <em>outside</em> the app is killing it. Find out who, and why.</p>
+      </blockquote>
+      <p class="muted" style="margin:0">Don't open the post-mortem until you've driven it.</p>
+    </section>
+
+    <section class="panel" id="run">
+      <div class="panel__head"><span class="panel__id">[01]</span><h2><span class="prefix">$</span> RUN THE SCENARIO</h2></div>
+      <div class="term"><div class="line cmd">make check LESSON=wheel/mystery-oom-kill</div></div>
+      <p class="muted" style="margin-top:var(--space-md)">This boots the broken guest: the service
+        runs inside a cgroup with a small memory limit, grows past it, and gets reaped. The app's
+        source is fine — the bug is in the environment's memory budget.</p>
+    </section>
+
+    <section class="panel" id="job">
+      <div class="panel__head"><span class="panel__id">[02]</span><h2><span class="prefix">./</span>YOUR JOB</h2></div>
+      <ol class="steps">
+        <li><strong>Reproduce &amp; read the symptom.</strong> The service vanishes mid-stride; its
+          own output just stops. Nothing in the app explains it.</li>
+        <li><strong>Ask the kernel.</strong> When the kernel kills a process to reclaim memory, it
+          leaves a detailed report in <code>dmesg</code> (<code>dmesg | grep -i oom</code>).</li>
+        <li><strong>Read the OOM report.</strong> Who got picked (process, pid), how much it was
+          using (<code>anon-rss</code>), and — crucially — the <strong>constraint</strong>.</li>
+        <li><strong>Point at the evidence.</strong> <em>"svc was OOM-killed by its cgroup limit
+          (<code>constraint=CONSTRAINT_MEMCG</code>); memory.max=16M, its RSS hit the cap."</em></li>
+      </ol>
+    </section>
+
+    <section class="panel" id="read">
+      <div class="panel__head"><span class="panel__id">[03]</span><h2><span class="prefix">./</span>READ THE OOM REPORT</h2></div>
+<pre class="code" data-lang="text"><code>hog invoked oom-killer: gfp_mask=0x..., order=0, oom_score_adj=0
+memory: usage 16384kB, limit 16384kB, failcnt N
+...
+oom-kill:constraint=CONSTRAINT_MEMCG,...,task=hog,pid=N
+Memory cgroup out of memory: Killed process N (hog) total-vm:..., anon-rss:..., oom_score_adj:0</code></pre>
+      <p class="muted"><code>constraint=CONSTRAINT_MEMCG</code> is the tell: the whole machine didn't
+        run out of memory — <strong>this process's cgroup hit its limit.</strong> That's the
+        difference between "buy more RAM" and "raise the container's limit (or fix the workload)."</p>
+    </section>
+
+    <section class="panel" id="hints">
+      <div class="panel__head"><span class="panel__id">[04]</span><h2><span class="prefix">./</span>GRADUATED HINTS</h2></div>
+      <details class="hint"><summary>where's the evidence?</summary>
+        <div class="hint__body"><p style="margin:0">The app logged nothing because it didn't fail —
+          it was <em>killed</em>. Ask the kernel: <code>dmesg | grep -i oom</code> (or look for
+          <code>Killed process</code>).</p></div>
+      </details>
+      <details class="hint"><summary>global or cgroup?</summary>
+        <div class="hint__body"><p style="margin:0">Look at <code>constraint=</code>.
+          <code>CONSTRAINT_NONE</code> = the whole box ran out; <code>CONSTRAINT_MEMCG</code> = a
+          <strong>cgroup</strong> limit was hit — only this service's memory was capped.</p></div>
+      </details>
+      <details class="hint"><summary>the limit</summary>
+        <div class="hint__body">
+<pre class="code" data-lang="sh"><code>cat /cg/svc/memory.max      <span class="cm"># the cap: 16M</span>
+cat /cg/svc/memory.events   <span class="cm"># oom_kill count</span></code></pre>
+          <p style="margin:0">The working set grew past 16M; the limit is too small for the workload.</p></div>
+      </details>
+    </section>
+
+    <section class="panel panel--warn" id="postmortem">
+      <div class="panel__head"><span class="panel__id">[05]</span><h2><span class="prefix">./</span>POST-MORTEM</h2></div>
+      <details class="hint"><summary>open after you've driven it &mdash; ground truth + the lesson</summary>
+        <div class="hint__body">
+          <p><strong>Ground truth.</strong> The service runs in a cgroup with
+            <code>memory.max = 16M</code>. Its working set grows past 16M; the cgroup OOM killer reaps
+            the biggest task in the cgroup (the service). Nothing is wrong with the binary — the
+            <strong>limit is too small for the workload</strong>.</p>
+          <p><strong>Why it's the archetype.</strong> Containers ship with memory limits; the same
+            image that's fine on a laptop (no limit) gets OOM-killed in prod (a tight
+            <code>memory.max</code>). It only makes sense once you read the OOM report and notice the
+            <em>cgroup</em> constraint — not "the box is out of RAM," but "this service's cap was hit."</p>
+          <p style="margin:0"><strong>What observability would have caught it faster.</strong> The OOM
+            report names the victim, its RSS, and the constraint immediately; alerting on
+            <code>memory.events</code> (<code>oom_kill</code>) would have made the page self-diagnosing.
+            The fix is outside this lesson (raise the limit, or shrink the working set) — the diagnosis
+            is what transfers.</p>
+        </div>
+      </details>
+      <p class="foot" style="margin-top:var(--space-md)"><code>check.sh</code> verifies the cgroup OOM
+        reproduces (<code>constraint=CONSTRAINT_MEMCG</code>) and names the victim. A later facilitator
+        layer grades <em>your</em> evidence.</p>
+    </section>
+
+    <section class="panel" id="further">
+      <div class="panel__head"><span class="panel__id">[06]</span><h2><span class="prefix">./</span>FURTHER READING</h2></div>
+      <p class="muted">Canonical references to explore deeper — each opens in a new tab.</p>
+      <ul>
+        <li><a class="ext" href="https://docs.kernel.org/admin-guide/cgroup-v2.html" target="_blank" rel="noopener noreferrer">docs.kernel.org — Control Group v2</a> — the memory controller: <code>memory.max</code>, <code>memory.events</code>, and cgroup OOM behavior.</li>
+        <li><a class="ext" href="https://docs.kernel.org/admin-guide/mm/concepts.html" target="_blank" rel="noopener noreferrer">docs.kernel.org — Concepts overview (memory management)</a> — reclaim and the OOM killer, the machinery behind the report.</li>
+      </ul>
+    </section>
+
+  </main>
+
+  <aside class="diagnostics" aria-label="Scenario diagnostics">
+    <section class="panel panel--fail">
+      <div class="panel__head"><span class="panel__id">[!]</span><h2 style="font-size:1.05rem"><span class="prefix">&gt;</span> system fault</h2></div>
+      <div class="kv"><span class="k">scenario</span><span class="v">mystery-oom-kill</span></div>
+      <div class="kv"><span class="k">tier</span><span class="v">basic</span></div>
+      <div class="kv"><span class="k">state</span><span class="v"><span class="badge badge--fail">LIVE FIRE</span></span></div>
+      <div class="kv"><span class="k">fault</span><span class="v">cgroup memory.max = 16M</span></div>
+      <div class="kv"><span class="k">surface</span><span class="v">OOM report &middot; cgroup</span></div>
+    </section>
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">&gt;</span> armed markers</h2></div>
+      <div class="kv"><span class="k">symptom</span><span class="v">CONSTRAINT_MEMCG</span></div>
+      <div class="kv"><span class="k">victim</span><span class="v">Killed process (hog)</span></div>
+    </section>
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">$</span> next</h2></div>
+      <div class="stack">
+        <a class="btn btn--dim" href="../works-on-my-laptop/index.html">&larr; WORKS ON MY LAPTOP</a>
+        <a class="btn btn--dim" href="../../index.html">COMMAND INDEX</a>
+      </div>
+    </section>
+  </aside>
+
+</div>
+</body>
+</html>

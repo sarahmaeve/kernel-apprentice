@@ -51,15 +51,14 @@ if [ ! -d "$KERNEL_SRC" ]; then
   tar -C "$BUILD_DIR" -xf "$tarball"
 fi
 
-# 4. Configure: x86_64 defconfig + our additive fragment. defconfig already boots
-#    under QEMU; the fragment only adds what the lessons need → boots first try.
-if [ ! -f "$KERNEL_SRC/.config" ]; then
-  log "configuring (defconfig + harness/config/tutorial.config)"
-  ( cd "$KERNEL_SRC"
-    make ARCH="$GUEST_ARCH" defconfig
-    scripts/kconfig/merge_config.sh -m .config "$HARNESS_DIR/config/tutorial.config"
-    make ARCH="$GUEST_ARCH" olddefconfig )
-fi
+# 4. Configure: x86_64 defconfig (once) + RE-MERGE our additive fragment every run,
+#    so edits to tutorial.config (e.g. enabling a controller) actually take effect.
+#    Merging is idempotent when the fragment is unchanged.
+log "configuring (defconfig + harness/config/tutorial.config)"
+( cd "$KERNEL_SRC"
+  [ -f .config ] || make ARCH="$GUEST_ARCH" defconfig
+  scripts/kconfig/merge_config.sh -m .config "$HARNESS_DIR/config/tutorial.config"
+  make ARCH="$GUEST_ARCH" olddefconfig )
 
 # 5. Build. bzImage = the bootable kernel. We also run `make modules` (not just
 #    modules_prepare) because it generates Module.symvers — the table of exported

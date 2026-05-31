@@ -22,6 +22,7 @@ LESSONS=(
   05-the-driver-that-oopses
   07-char-device-with-ioctl
   wheel/works-on-my-laptop
+  wheel/mystery-oom-kill
 )
 
 ensure_kernel
