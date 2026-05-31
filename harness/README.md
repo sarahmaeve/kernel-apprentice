@@ -26,13 +26,36 @@ built; the QEMU guest runs the kernel you compiled here and can be broken freely
 | `run-qemu.sh` | Boot `bzImage` + an initramfs, stream + capture serial, enforce a timeout. |
 | `check.sh` | Dispatcher: run one lesson's `check.sh`, or all in order. |
 
-## Build once, reuse forever
+## Build once, reuse forever — on a Linux-native volume
 
-The kernel source tree and `bzImage` live in `harness/.build/` (gitignored), which
-is **bind-mounted from the host**. So the slow full compile happens exactly once
-and survives `colima stop/start` and container removal. After that, editing one
-`.c` is an **incremental** rebuild — seconds. The compile is *native* in the
-container (only the guest *runs* emulated), so it's minutes, not hours.
+The kernel source tree and `bzImage` live in `harness/.build/`, which is a **Docker
+named volume** (`kernel-apprentice-build`), **not** the host bind mount.
+
+Why a volume: the kernel tree is full of relative symlinks (e.g.
+`tools/testing/selftests/bpf/disasm.c -> ../../../../kernel/bpf/disasm.c`). On
+macOS the repo reaches the container over a virtiofs bind mount, and `tar` **cannot
+create those symlinks there** — it fails with `EACCES`, and the half-made links even
+resist `rm`. The identical tarball extracts cleanly on a Linux ext4 volume, so
+that's where the build lives. (This also sidesteps macOS case-insensitivity.)
+
+The volume persists across `colima stop/start` and container removal, so the slow
+full compile happens exactly once; `make clean` removes it. The compile is *native*
+in the container (only the guest *runs* emulated), so it's minutes, not hours. Only
+the download (`harness/.cache/`, a plain file virtiofs handles fine) stays on the
+host bind mount, so re-creating the volume never re-downloads.
+
+### Editing the kernel source
+
+Because the source lives in the volume, edit it from inside the workbench:
+
+```sh
+make shell
+nano harness/.build/linux-6.18.33/kernel/sys.c   # or vim — both are installed
+```
+
+VS Code / Cursor users can **Attach to Running Container** for a full IDE on the
+volume. `make check` (run from the host) starts a fresh container on the same
+volume, so it always sees your edits.
 
 ## Portability (a project goal)
 

@@ -91,3 +91,11 @@ the part that transfers to every future incident, is what you just did.
 `EMFILE` failure **and** the low limit is visible in `/proc`. (A later facilitator
 layer — graduated hints or an LLM on-call lead — will grade *your* evidence; for
 now, the check confirms the box is broken the way the page describes.)
+
+## Further reading
+
+Canonical references for deeper exploration:
+
+- [getrlimit(2)](https://man7.org/linux/man-pages/man2/getrlimit.2.html) — `RLIMIT_NOFILE` and the soft/hard resource-limit model behind the failure.
+- [proc_pid_limits(5)](https://man7.org/linux/man-pages/man5/proc_pid_limits.5.html) — the `/proc/<pid>/limits` file you used as evidence.
+- [limits.conf(5)](https://man7.org/linux/man-pages/man5/limits.conf.5.html) — how production actually sets these limits (the fix side).

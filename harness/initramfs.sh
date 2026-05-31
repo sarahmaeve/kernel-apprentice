@@ -31,9 +31,13 @@ mk_initramfs() {
   root="$(mktemp -d)"
   mkdir -p "$root"/{bin,sbin,proc,sys,dev,tmp,etc,root}
 
-  # static BusyBox + one symlink per applet (sh, mount, cat, insmod, ...)
+  # static BusyBox + one symlink per applet (sh, mount, cat, insmod, ...).
+  # Skip the "busybox" applet itself — `busybox --list` includes it, and
+  # `ln -sf busybox busybox` errors ("same file") and aborts under `set -e`.
   install -D "$(command -v busybox)" "$root/bin/busybox"
-  ( cd "$root/bin" && for applet in $(./busybox --list); do ln -sf busybox "$applet"; done )
+  ( cd "$root/bin" && for applet in $(./busybox --list); do
+      [ "$applet" = busybox ] || ln -sf busybox "$applet"
+    done )
 
   # extra guest tools (e.g. strace) plus their shared libraries
   for b in "$@"; do copy_with_libs "$b" "$root"; done

@@ -89,3 +89,12 @@ Green when the serial log contains:
 The ring buffer is the kernel's own running narration. Lessons from here on —
 OOM reports, oopses, tracepoints — are all *read out of this buffer*. You just
 built the thing that writes to it.
+
+## Further reading
+
+Canonical references for deeper exploration:
+
+- [docs.kernel.org — Message logging with printk](https://docs.kernel.org/core-api/printk-basics.html) — log levels, `pr_*` helpers, the ring buffer.
+- [docs.kernel.org — printk format specifiers](https://docs.kernel.org/core-api/printk-formats.html) — the right way to print pointers, errnos, and kernel types.
+- [docs.kernel.org — Dynamic debug](https://docs.kernel.org/admin-guide/dynamic-debug-howto.html) — switch on the `pr_debug` line from the exploration with no rebuild.
+- [docs.kernel.org — Building External Modules](https://docs.kernel.org/kbuild/modules.html) — the out-of-tree build you just ran, fully explained.

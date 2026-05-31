@@ -110,6 +110,7 @@ code { font-family:var(--font-mono); color:var(--secondary); }
 /* ---- Links + buttons ---------------------------------------------------- */
 a { color:var(--info); text-decoration:none; border-bottom:1px dotted rgba(64,207,255,0.45); }
 a:hover { color:#9fe9ff; border-bottom-color:var(--info); }
+a.ext::after { content:" \2197"; font-size:0.85em; opacity:0.7; }   /* external link */
 a:focus-visible, .btn:focus-visible, .navlink:focus-visible {
   outline:2px solid var(--secondary); outline-offset:2px;
 }
@@ -215,6 +216,7 @@ a:focus-visible, .btn:focus-visible, .navlink:focus-visible {
 .term .cmd { color:var(--text); }
 .term .cmt { color:var(--muted); }
 .term .out { color:var(--phosphor-dim); }
+.term .warn { color:var(--warning); }            /* an expected halt / gate */
 
 /* ---- Tables ------------------------------------------------------------- */
 .table-wrap { overflow-x:auto; }

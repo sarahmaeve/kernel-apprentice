@@ -5,6 +5,11 @@
 > *explains* it, and your own `printk` lets you *reach in* and confirm the exact
 > line ran.
 
+> **Working in the workbench.** The kernel source lives in a Linux build volume, so
+> you read and edit it from inside the container: `make shell`, then `nano`/`vim` on
+> `harness/.build/linux-6.18.33/kernel/sys.c` (or attach your IDE). Run `make check`
+> from the host. See [harness/README.md](../harness/README.md) for why.
+
 ## The mystery
 
 Every interaction between your software and the kernel goes through one narrow
@@ -39,8 +44,9 @@ getpid()  = 42
 
 ## Read — the code explains it
 
-On the kernel side, `getpid()` is handled by a tiny function. In the pinned
-source (`harness/.build/linux-6.18.33/`), open **`kernel/sys.c`** and find:
+On the kernel side, `getpid()` is handled by a tiny function. The kernel source
+lives in the build volume, so read it from the workbench — `make shell`, then open
+**`harness/.build/linux-6.18.33/kernel/sys.c`** (`less`, `nano`, or `vim`) and find:
 
 ```c
 SYSCALL_DEFINE0(getpid)
@@ -60,7 +66,8 @@ Now reach in. Add a `printk` to that handler so it announces itself — but only
 `getpid`; a blind printk here would flood — a lesson in itself, and the reason
 later lessons reach for dynamic tracing instead).
 
-Edit `SYSCALL_DEFINE0(getpid)` in `kernel/sys.c` to read:
+In `make shell`, edit `SYSCALL_DEFINE0(getpid)` in
+`harness/.build/linux-6.18.33/kernel/sys.c` (with `nano` or `vim`) to read:
 
 ```c
 SYSCALL_DEFINE0(getpid)
@@ -72,7 +79,8 @@ SYSCALL_DEFINE0(getpid)
 }
 ```
 
-Then from the repo root:
+Then, **from the host**, run the check — it starts a fresh container on the same
+build volume, so it picks up your edit:
 
 ```sh
 make check LESSON=01-syscall-is-the-door
@@ -96,6 +104,7 @@ door, the function behind it, and proof it ran — one event, three views.
 
 <details><summary>Hint 1 — where does getpid live?</summary>
 
+Inside `make shell`:
 `grep -rn "SYSCALL_DEFINE0(getpid)" harness/.build/linux-6.18.33/kernel/`
 </details>
 
@@ -118,3 +127,11 @@ and `task_tgid_vnr` are all already available in that file — no new includes.
 If you can find the function behind a syscall and prove it ran, you can do that
 for *any* boundary crossing your software makes. Everything after this — task
 states, OOM, dropped packets — is the same move against a bigger door.
+
+## Further reading
+
+Canonical references for deeper exploration:
+
+- [docs.kernel.org — Adding a New System Call](https://docs.kernel.org/process/adding-syscalls.html) — how `SYSCALL_DEFINE` is defined and wired into the kernel.
+- [syscalls(2)](https://man7.org/linux/man-pages/man2/syscalls.2.html) — the full catalog of the boundary you just crossed.
+- [strace(1)](https://man7.org/linux/man-pages/man1/strace.1.html) — the tool from the Observe step, in depth.

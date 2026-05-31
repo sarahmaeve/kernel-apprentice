@@ -26,6 +26,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       strace ltrace trace-cmd bpftrace gdb \
       # --- plumbing: downloads, source mgmt, initramfs assembly ---
       curl ca-certificates git gawk file rsync procps \
+      # --- in-container editors (the kernel source lives in a Linux volume) ---
+      nano vim \
     && rm -rf /var/lib/apt/lists/*
 
 # The repo is bind-mounted here at run time (see Makefile: -v $PWD:/work). The

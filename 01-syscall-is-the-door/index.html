@@ -25,6 +25,7 @@
       <a class="navlink" href="#touch">touch</a>
       <a class="navlink" href="#verify">verify</a>
       <a class="navlink" href="#hints">hints</a>
+      <a class="navlink" href="#further">further reading</a>
     </nav>
     <span class="label" style="margin-top:var(--space-lg)">./source</span>
     <nav>
@@ -52,6 +53,12 @@
         kernel for its PID and print it:</p>
 <pre class="code" data-lang="c"><code>pid_t p = getpid();           <span class="cm">/* the door: traps into SYSCALL_DEFINE0(getpid) */</span>
 printf("door: my pid is %d\n", (int)p);</code></pre>
+      <div class="callout" style="margin-top:var(--space-md)">
+        <strong>Working in the workbench.</strong> The kernel source lives in a Linux build
+        volume, so connect with <code>make shell</code> and edit with <code>nano</code>/<code>vim</code>
+        (or attach your IDE). Run the check from the host:
+        <code>make check LESSON=01-syscall-is-the-door</code>.
+      </div>
     </section>
 
     <section class="panel" id="observe">
@@ -65,9 +72,9 @@ printf("door: my pid is %d\n", (int)p);</code></pre>
 
     <section class="panel" id="read">
       <div class="panel__head"><span class="panel__id">[02]</span><h2><span class="prefix">./</span>READ &mdash; the code explains it</h2></div>
-      <p>On the kernel side, <code>getpid()</code> is a tiny function. In the pinned
-        source (<code>harness/.build/linux-6.18.33/</code>), open
-        <strong>kernel/sys.c</strong> and find:</p>
+      <p>On the kernel side, <code>getpid()</code> is a tiny function. The source lives in
+        the build volume — read it from the workbench (<code>make shell</code>, then open
+        <code>harness/.build/linux-6.18.33/kernel/sys.c</code>):</p>
 <pre class="code" data-lang="c"><code>SYSCALL_DEFINE0(getpid)
 {
         return task_tgid_vnr(current);
@@ -82,7 +89,8 @@ printf("door: my pid is %d\n", (int)p);</code></pre>
       <div class="panel__head"><span class="panel__id">[03]</span><h2><span class="prefix">./</span>TOUCH &mdash; your printk confirms it</h2></div>
       <p>Reach in. Announce the handler — but only for <em>our</em> process, so we don't
         drown the log (every program calls <code>getpid</code>; a blind printk here floods
-        — which is exactly why later lessons reach for dynamic tracing instead).</p>
+        — which is exactly why later lessons reach for dynamic tracing instead). Edit it in
+        the workbench: <code>make shell</code>, then <code>nano harness/.build/linux-6.18.33/kernel/sys.c</code>:</p>
 <pre class="code" data-lang="c"><code>SYSCALL_DEFINE0(getpid)
 {
 <span class="add">        if (!strcmp(current->comm, "door"))</span>
@@ -90,7 +98,7 @@ printf("door: my pid is %d\n", (int)p);</code></pre>
 <span class="add">                        current->comm, task_tgid_vnr(current));</span>
         return task_tgid_vnr(current);
 }</code></pre>
-      <p>Then from the repo root:</p>
+      <p>Then, from the host — a fresh container picks up your edit via the shared volume:</p>
       <div class="term"><div class="line cmd">make check LESSON=01-syscall-is-the-door</div></div>
       <p class="muted" style="margin-top:var(--space-md)">The harness does an
         <strong>incremental</strong> rebuild (seconds), boots the guest, runs
@@ -112,7 +120,7 @@ printf("door: my pid is %d\n", (int)p);</code></pre>
     <section class="panel" id="hints">
       <div class="panel__head"><span class="panel__id">[05]</span><h2><span class="prefix">./</span>GRADUATED HINTS</h2></div>
       <details class="hint"><summary>where does getpid live?</summary>
-        <div class="hint__body"><pre class="code"><code>grep -rn "SYSCALL_DEFINE0(getpid)" harness/.build/linux-6.18.33/kernel/</code></pre></div>
+        <div class="hint__body"><p style="margin:0 0 var(--space-sm)">Inside <code>make shell</code>:</p><pre class="code"><code>grep -rn "SYSCALL_DEFINE0(getpid)" harness/.build/linux-6.18.33/kernel/</code></pre></div>
       </details>
       <details class="hint"><summary>why guard on the process name?</summary>
         <div class="hint__body"><p style="margin:0">Every process calls <code>getpid</code>
@@ -130,6 +138,16 @@ printf("door: my pid is %d\n", (int)p);</code></pre>
       <p class="foot">If you can find the function behind a syscall and prove it ran, you can
         do it for any boundary your software crosses. Everything after this is the same
         move against a bigger door.</p>
+    </section>
+
+    <section class="panel" id="further">
+      <div class="panel__head"><span class="panel__id">[06]</span><h2><span class="prefix">./</span>FURTHER READING</h2></div>
+      <p class="muted">Canonical references to explore deeper — each opens in a new tab.</p>
+      <ul>
+        <li><a class="ext" href="https://docs.kernel.org/process/adding-syscalls.html" target="_blank" rel="noopener noreferrer">docs.kernel.org — Adding a New System Call</a> — how <code>SYSCALL_DEFINE</code> is defined and wired into the kernel.</li>
+        <li><a class="ext" href="https://man7.org/linux/man-pages/man2/syscalls.2.html" target="_blank" rel="noopener noreferrer">syscalls(2)</a> — the full catalog of the boundary you just crossed.</li>
+        <li><a class="ext" href="https://man7.org/linux/man-pages/man1/strace.1.html" target="_blank" rel="noopener noreferrer">strace(1)</a> — the tool from the Observe step, in depth.</li>
+      </ul>
     </section>
 
   </main>

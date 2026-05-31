@@ -27,14 +27,21 @@ COLIMA_ARGS ?= --cpu 6 --memory 8 --disk 60
 # Pass /dev/kvm through only if the host exposes it (x86_64 Linux). Empty on macOS.
 KVM := $(shell [ -e /dev/kvm ] && echo --device /dev/kvm)
 
-# Repo bind-mounted at /work so the kernel build under harness/.build/ persists on
-# the host across container + colima restarts (build once).
-RUN_IT := $(RUNTIME) run --rm -it --platform=$(PLATFORM) $(KVM) -v "$(CURDIR)":/work $(IMAGE)
-RUN    := $(RUNTIME) run --rm    --platform=$(PLATFORM) $(KVM) -v "$(CURDIR)":/work $(IMAGE)
+# Repo bind-mounted at /work for the lesson files + scripts. The kernel build,
+# however, MUST live on a Linux-native filesystem: the macOS virtiofs bind mount
+# can't create the kernel tree's relative symlinks (tar fails with EACCES, and the
+# half-made links even resist rm). So harness/.build is a named VOLUME; only the
+# .cache download stays on the host bind mount. The volume persists across
+# container + colima restarts (build once) until `make clean`.
+VOLUME := kernel-apprentice-build
+MOUNTS := -v "$(CURDIR)":/work -v $(VOLUME):/work/harness/.build
+
+RUN_IT := $(RUNTIME) run --rm -it --platform=$(PLATFORM) $(KVM) $(MOUNTS) $(IMAGE)
+RUN    := $(RUNTIME) run --rm    --platform=$(PLATFORM) $(KVM) $(MOUNTS) $(IMAGE)
 
 LESSON ?=
 .DEFAULT_GOAL := help
-.PHONY: help up down doctor image shell kernel initramfs check status clean distclean
+.PHONY: help up down doctor image shell kernel initramfs check status validate clean distclean
 
 help: ## Show available targets
 	@awk 'BEGIN{FS=":.*##"} /^[a-zA-Z_-]+:.*##/ {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -59,19 +66,23 @@ shell: image ## Open an interactive workbench shell
 	$(RUN_IT) bash
 
 kernel: image ## Build the pinned kernel — slow ONE-TIME; cached in harness/.build
-	$(RUN) harness/build-kernel.sh; rc=$$?; ./harness/gen-status.sh; exit $$rc
+	$(RUN) harness/build-kernel.sh; rc=$$?; $(RUN) harness/gen-status.sh; exit $$rc
 
 initramfs: image ## Build the base BusyBox initramfs
 	$(RUN) harness/build-initramfs.sh
 
 check: image ## Run lesson check(s): make check LESSON=01-syscall-is-the-door (omit = all)
-	$(RUN) harness/check.sh $(LESSON); rc=$$?; ./harness/gen-status.sh; exit $$rc
+	$(RUN) harness/check.sh $(LESSON); rc=$$?; $(RUN) harness/gen-status.sh; exit $$rc
 
-status: ## Regenerate the dashboard's live status (assets/status.js, gitignored)
-	./harness/gen-status.sh
+status: image ## Regenerate the dashboard's live status (assets/status.js, gitignored)
+	$(RUN) harness/gen-status.sh
 
-clean: ## Remove kernel/initramfs build artifacts (keeps downloaded tarballs)
-	rm -rf harness/.build
+validate: ## Validate the HTML docs (tag balance, links, css vars, fonts); host-only, no container
+	python3 harness/validate-html.py
 
-distclean: clean ## Also remove downloaded source tarballs
+clean: ## Remove the kernel build (named volume) + host artifacts; keeps the download cache
+	-$(RUNTIME) volume rm $(VOLUME) 2>/dev/null
+	rm -rf harness/.build assets/status.js
+
+distclean: clean ## Also remove the downloaded source tarball cache
 	rm -rf harness/.cache

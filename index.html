@@ -26,6 +26,7 @@
       <a class="navlink" href="#method">method</a>
       <a class="navlink" href="#curriculum">curriculum</a>
       <a class="navlink" href="#quickstart">quickstart</a>
+      <a class="navlink" href="#workbench">workbench</a>
       <a class="navlink" href="#portability">portability</a>
     </nav>
     <span class="label" style="margin-top:var(--space-lg)">./source</span>
@@ -138,23 +139,65 @@
         <h2><span class="prefix">$</span> QUICKSTART</h2>
       </div>
       <div class="term" role="group" aria-label="Quickstart commands">
-        <div class="line cmt"># 1. build the workbench image (starts colima on macOS)</div>
+        <div class="line cmt"># 1 · build the workbench image (starts colima on macOS)</div>
         <div class="line cmd">make image</div>
-        <div class="line cmt"># 2. build the pinned kernel — one-time, then cached forever</div>
-        <div class="line cmt">#    first run prints the tarball sha256 and asks you to pin it (no guessed hashes)</div>
+        <div class="line cmt"># 2 · build the pinned kernel — ONE-TIME, then cached. it runs in TWO steps:</div>
+        <div class="line cmt">#   2a · first run downloads 6.18.33, computes its sha256, and halts (expected):</div>
         <div class="line cmd">make kernel</div>
-        <div class="line cmt"># 3. do a lesson</div>
+        <div class="line warn">FAIL  KERNEL_SHA256 is blank in harness/versions.env.</div>
+        <div class="line warn">      Computed hash of the downloaded tarball:</div>
+        <div class="line warn">          KERNEL_SHA256="6f16ff30…0fb782"</div>
+        <div class="line cmt">#   2b · paste that line into harness/versions.env, then re-run — it verifies</div>
+        <div class="line cmt">#        the pin and compiles bzImage (a few minutes, native — not TCG):</div>
+        <div class="line cmd">make kernel</div>
+        <div class="line out">PASS  tarball sha256 verified</div>
+        <div class="line cmt"># 3 · do a lesson</div>
         <div class="line cmd">make check LESSON=01-syscall-is-the-door</div>
         <div class="line out">PASS  view 1 — strace shows getpid() crossing the door</div>
         <div class="line out">PASS  view 3 — your printk fired for the 'door' process</div>
       </div>
-      <p class="muted" style="margin-top:var(--space-md)"><code>make help</code> lists every target;
+      <p class="muted" style="margin-top:var(--space-md)"><strong>Why <code>make kernel</code> runs
+        twice.</strong> We never guess hashes. The first run shows you the real sha256 so you pin a
+        value you've actually seen — ideally cross-checked against <code>kernel.org</code> — which
+        locks the supply chain for every contributor. Once pinned in <code>harness/versions.env</code>,
+        the build is a single command and the kernel is cached for good.</p>
+      <p class="muted"><code>make help</code> lists every target;
         <code>make check</code> with no <code>LESSON</code> runs them all.</p>
+    </section>
+
+    <section class="panel" id="workbench">
+      <div class="panel__head">
+        <span class="panel__id">[05]</span>
+        <h2><span class="prefix">./</span>WORKBENCH ACCESS</h2>
+      </div>
+      <p class="muted">The kernel source lives in a Linux build volume, not on your host
+        filesystem (see <a href="harness/README.md">harness/</a> for why), so you read and
+        edit it from inside the workbench.</p>
+      <div class="grid-3">
+        <div class="cell">
+          <h3>connect</h3>
+          <p class="muted" style="margin:0"><code>make shell</code> drops you into the workbench
+            container. VS Code / Cursor users: <em>Attach to Running Container</em> for a full
+            IDE on the volume.</p>
+        </div>
+        <div class="cell">
+          <h3>edit</h3>
+          <p class="muted" style="margin:0">In the shell, edit with <code>nano</code> or
+            <code>vim</code> — e.g. <code>harness/.build/linux-6.18.33/kernel/sys.c</code>. The
+            lesson files in this repo edit normally on your host.</p>
+        </div>
+        <div class="cell">
+          <h3>sanity</h3>
+          <p class="muted" style="margin:0"><code>make doctor</code> checks host prereqs &middot;
+            <code>make validate</code> lints these docs &middot; <code>make status</code> refreshes
+            this dashboard.</p>
+        </div>
+      </div>
     </section>
 
     <section class="panel" id="portability">
       <div class="panel__head">
-        <span class="panel__id">[05]</span>
+        <span class="panel__id">[06]</span>
         <h2><span class="prefix">./</span>PORTABILITY</h2>
       </div>
       <ul class="stack" style="margin:0;padding-left:1.2em">

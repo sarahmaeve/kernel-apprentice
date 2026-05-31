@@ -25,6 +25,7 @@
       <a class="navlink" href="#touch">touch</a>
       <a class="navlink" href="#verify">verify</a>
       <a class="navlink" href="#explore">exploration</a>
+      <a class="navlink" href="#further">further reading</a>
     </nav>
     <span class="label" style="margin-top:var(--space-lg)">./source</span>
     <nav>
@@ -109,6 +110,17 @@ echo 1 &gt; /proc/sys/kernel/printk   <span class="cm"># now only EMERG/ALERT re
       <p class="muted"><strong>The debug line.</strong> <code>pr_debug</code> (level 7) is
         silent unless dynamic debug is enabled for it. Why might a kernel be built that way?
         When would you want it on in production?</p>
+    </section>
+
+    <section class="panel" id="further">
+      <div class="panel__head"><span class="panel__id">[06]</span><h2><span class="prefix">./</span>FURTHER READING</h2></div>
+      <p class="muted">Canonical references to explore deeper — each opens in a new tab.</p>
+      <ul>
+        <li><a class="ext" href="https://docs.kernel.org/core-api/printk-basics.html" target="_blank" rel="noopener noreferrer">docs.kernel.org — Message logging with printk</a> — log levels, <code>pr_*</code> helpers, the ring buffer.</li>
+        <li><a class="ext" href="https://docs.kernel.org/core-api/printk-formats.html" target="_blank" rel="noopener noreferrer">docs.kernel.org — printk format specifiers</a> — the right way to print pointers, errnos, and kernel types.</li>
+        <li><a class="ext" href="https://docs.kernel.org/admin-guide/dynamic-debug-howto.html" target="_blank" rel="noopener noreferrer">docs.kernel.org — Dynamic debug</a> — switch on the <code>pr_debug</code> line from the exploration with no rebuild.</li>
+        <li><a class="ext" href="https://docs.kernel.org/kbuild/modules.html" target="_blank" rel="noopener noreferrer">docs.kernel.org — Building External Modules</a> — the out-of-tree build you just ran, fully explained.</li>
+      </ul>
     </section>
 
   </main>

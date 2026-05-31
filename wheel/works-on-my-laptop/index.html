@@ -24,6 +24,7 @@
       <a class="navlink" href="#job">your job</a>
       <a class="navlink" href="#hints">hints</a>
       <a class="navlink" href="#postmortem">post-mortem</a>
+      <a class="navlink" href="#further">further reading</a>
     </nav>
     <span class="label" style="margin-top:var(--space-lg)">./source</span>
     <nav>
@@ -127,6 +128,16 @@
         scenario is correctly armed: the run reproduces the <code>EMFILE</code> failure and the
         low limit is visible in <code>/proc</code>. A later facilitator layer will grade
         <em>your</em> evidence.</p>
+    </section>
+
+    <section class="panel" id="further">
+      <div class="panel__head"><span class="panel__id">[05]</span><h2><span class="prefix">./</span>FURTHER READING</h2></div>
+      <p class="muted">Canonical references to explore deeper — each opens in a new tab.</p>
+      <ul>
+        <li><a class="ext" href="https://man7.org/linux/man-pages/man2/getrlimit.2.html" target="_blank" rel="noopener noreferrer">getrlimit(2)</a> — <code>RLIMIT_NOFILE</code> and the soft/hard resource-limit model behind the failure.</li>
+        <li><a class="ext" href="https://man7.org/linux/man-pages/man5/proc_pid_limits.5.html" target="_blank" rel="noopener noreferrer">proc_pid_limits(5)</a> — the <code>/proc/&lt;pid&gt;/limits</code> file you used as evidence.</li>
+        <li><a class="ext" href="https://man7.org/linux/man-pages/man5/limits.conf.5.html" target="_blank" rel="noopener noreferrer">limits.conf(5)</a> — how production actually sets these limits (the fix side).</li>
+      </ul>
     </section>
 
   </main>

@@ -23,7 +23,7 @@ line ran*. You drive; the symptom comes first.
 - A container runtime: **Docker** or **Podman**. On macOS this project uses
   [colima](https://github.com/abiosoft/colima) (the Makefile starts it for you).
 - `make` and `git` on the host.
-- ~10 GB free disk for the kernel source tree + build.
+- ~10 GB free disk for the kernel build (kept in a Docker volume in the colima VM).
 
 Everything else (cross toolchain, QEMU, strace/perf/bpftrace/trace-cmd) ships
 inside the workbench image — you don't install it on your host.
@@ -34,9 +34,12 @@ inside the workbench image — you don't install it on your host.
 # 1. Build the workbench image (starts colima on macOS automatically).
 make image
 
-# 2. Build the pinned kernel — the one-time slow step, then cached forever.
-#    First run prints the tarball's sha256 and asks you to pin it (we don't guess
-#    hashes); paste it into harness/versions.env and re-run. See harness/README.md.
+# 2. Build the pinned kernel — ONE-TIME, then cached. It runs in TWO steps:
+#    2a. First run downloads 6.18.33, computes its sha256, and HALTS (expected) —
+#        we never guess hashes. It prints:  KERNEL_SHA256="<64 hex chars>"
+make kernel
+#    2b. Paste that line into harness/versions.env (ideally after cross-checking it
+#        against kernel.org), then re-run. It verifies the pin and compiles bzImage.
 make kernel
 
 # 3. Do a lesson.
@@ -44,6 +47,11 @@ make check LESSON=01-syscall-is-the-door
 ```
 
 `make help` lists every target. `make check` with no `LESSON` runs them all.
+
+> **Editing kernel source.** It lives in a Docker volume (see
+> [harness/README.md](harness/README.md) for why), so edit it from inside
+> `make shell` — `nano`/`vim` are installed, or attach your IDE to the running
+> container. The lesson files in this repo are edited normally on your host.
 
 ## Layout
 
@@ -71,6 +79,8 @@ This is meant to be cloned and explored by others, so it's built to be portable:
   Silicon (slower first build, same behavior).
 - **Pinned kernel:** `6.18.33` LTS (newest LTS; maintained to Dec 2028), set in
   `harness/versions.env`. Override there to re-pin.
+- **Build isolation:** the kernel builds on a Linux-native Docker volume, sidestepping
+  host-filesystem quirks (macOS symlink/case-insensitivity limits).
 
 ## Status
 

@@ -61,13 +61,16 @@ if [ ! -f "$KERNEL_SRC/.config" ]; then
     make ARCH="$GUEST_ARCH" olddefconfig )
 fi
 
-# 5. Build. bzImage = the bootable kernel; modules_prepare readies the tree so
-#    lesson 02's out-of-tree module compiles against it (no full in-tree `make
-#    modules`, which would needlessly build hundreds of defconfig drivers).
+# 5. Build. bzImage = the bootable kernel. We also run `make modules` (not just
+#    modules_prepare) because it generates Module.symvers — the table of exported
+#    kernel symbols an out-of-tree module links against. Without it, modpost rejects
+#    lesson 02's hello.ko with "_printk undefined!" etc. This also compiles the
+#    defconfig =m modules (a one-time cost on the cached volume); trimming the module
+#    set to shrink that is a possible later optimization.
 njobs="$(nproc)"
-log "building bzImage -j$njobs (first build is the one-time cost; later edits are incremental)"
+log "building bzImage + modules -j$njobs (one-time; modules step generates Module.symvers)"
 make -C "$KERNEL_SRC" ARCH="$GUEST_ARCH" -j"$njobs" bzImage
-make -C "$KERNEL_SRC" ARCH="$GUEST_ARCH" -j"$njobs" modules_prepare
+make -C "$KERNEL_SRC" ARCH="$GUEST_ARCH" -j"$njobs" modules
 
 [ -f "$KERNEL_BZIMAGE" ] || die "build completed but bzImage missing at $KERNEL_BZIMAGE"
 ok "kernel ready: $KERNEL_BZIMAGE ($(du -h "$KERNEL_BZIMAGE" | cut -f1))"
