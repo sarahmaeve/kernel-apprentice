@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>B2 // trace just what matters</title>
+<meta name="description" content="CHALLENGE: instrument a worker with trace_printk and isolate its signal with per-module/per-pid filters, trace_marker, and tracing_on.">
+<!-- IBM Plex Mono self-hosted via @font-face in crt.css -->
+<link rel="stylesheet" href="../assets/crt.css">
+</head>
+<body>
+<div class="app">
+
+  <header class="statusline">
+    <span class="live"><span class="prefix">&gt;</span> lesson B2 // trace just what matters<span class="cursor" aria-hidden="true"></span></span>
+    <span class="meta">[ challenge &middot; isolate the signal ]</span>
+  </header>
+
+  <nav class="rail" aria-label="Sections">
+    <span class="label">./lesson B2</span>
+    <nav>
+      <a class="navlink" href="#observe" aria-current="true">observe</a>
+      <a class="navlink" href="#challenge">challenge</a>
+      <a class="navlink" href="#toolkit">isolation toolkit</a>
+      <a class="navlink" href="#hints">hints</a>
+      <a class="navlink" href="#verify">verify</a>
+      <a class="navlink" href="#further">further reading</a>
+    </nav>
+    <span class="label" style="margin-top:var(--space-lg)">./source</span>
+    <nav>
+      <a class="navlink" href="../index.html">&larr; command index</a>
+      <a class="navlink" href="README.md">README.md</a>
+      <a class="navlink" href="module/b2_worker.c">b2_worker.c</a>
+      <a class="navlink" href="check.sh">check.sh</a>
+    </nav>
+  </nav>
+
+  <main class="workspace">
+
+    <section class="panel panel--hero" id="observe">
+      <h1><span class="prefix">$</span> B2 ./trace-just-what-matters</h1>
+      <p class="tagline">cut the firehose down to your signal</p>
+      <p>A whole-kernel trace is millions of lines a second. B2 has two halves:
+        <strong>instrument</strong> the code you care about with <code>trace_printk()</code>, and
+        <strong>isolate</strong> it with per-module / per-PID filters, <code>trace_marker</code>
+        brackets, and <code>tracing_on</code>. B1 followed the path; B2 cuts the noise.</p>
+      <div class="term"><div class="line cmd">make check LESSON=B2-trace-just-what-matters</div></div>
+      <p class="muted" style="margin-top:var(--space-md)"><code>module/b2_worker.c</code> exposes
+        <code>/proc/b2-go</code>; writing to it runs three phases. Only <strong>parse</strong>
+        annotates the trace so far, so the check is <span class="badge badge--warn">RED</span> —
+        <code>b2: compute</code> and <code>b2: emit</code> are missing. Runs on the stock kernel.</p>
+    </section>
+
+    <section class="panel" id="challenge">
+      <div class="panel__head"><span class="panel__id">[01]</span><h2><span class="prefix">./</span>THE CHALLENGE</h2></div>
+      <p>Add a <code>trace_printk()</code> to <code>phase_compute()</code> and <code>phase_emit()</code>
+        so the trace shows a line containing <strong><code>b2: compute</code></strong> and
+        <strong><code>b2: emit</code></strong> — mirroring the worked example:</p>
+<pre class="code" data-lang="c"><code>trace_printk("b2: parse %d bytes\n", n);   <span class="cm">// already there, in phase_parse</span></code></pre>
+      <p class="muted"><code>trace_printk()</code> writes into the trace ring buffer
+        (<code>/sys/kernel/tracing/trace</code>), not the kernel log — cheap enough to leave in a hot
+        path, and it shows up inline with the function trace and your <code>trace_marker</code> notes.</p>
+    </section>
+
+    <section class="panel" id="toolkit">
+      <div class="panel__head"><span class="panel__id">[02]</span><h2><span class="prefix">./</span>ISOLATION TOOLKIT</h2></div>
+      <p class="muted">The recipe the check runs around your annotations:</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>tool</th><th>what it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>echo :mod:b2_worker &gt; set_ftrace_filter</code></td><td>function tracer sees <strong>only this module's</strong> functions</td></tr>
+            <tr><td><code>echo $$ &gt; set_ftrace_pid</code></td><td>…and <strong>only the triggering task</strong></td></tr>
+            <tr><td><code>echo "…" &gt; trace_marker</code></td><td>a <strong>userspace annotation</strong>, dropped inline into the trace</td></tr>
+            <tr><td><code>echo 0/1 &gt; tracing_on</code></td><td><strong>enable / disable</strong> the buffer around your window</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="muted" style="margin-top:var(--space-md)">"The whole kernel, forever" becomes "this
+        module, this process, this moment" — with your <code>trace_printk</code> notes threaded through.</p>
+    </section>
+
+    <section class="panel" id="hints">
+      <div class="panel__head"><span class="panel__id">[03]</span><h2><span class="prefix">./</span>GRADUATED HINTS</h2></div>
+      <details class="hint"><summary>Hint 1 — where do the annotations go?</summary>
+        <div class="hint__body"><p style="margin:0">In <code>module/b2_worker.c</code>,
+          <code>phase_compute()</code> and <code>phase_emit()</code> each have a <code>TODO(B2)</code>
+          where the <code>trace_printk()</code> belongs. <code>phase_parse()</code> shows the shape.</p></div>
+      </details>
+      <details class="hint"><summary>Hint 2 — what must the line contain?</summary>
+        <div class="hint__body"><p style="margin:0">The check greps the trace for the literal
+          substrings <code>b2: compute</code> and <code>b2: emit</code>. Your format string must
+          contain those — e.g. <code>trace_printk("b2: compute sum=%d\n", n*3);</code></p></div>
+      </details>
+      <details class="hint"><summary>Hint 3 — the solution</summary>
+        <div class="hint__body">
+<pre class="code" data-lang="c"><code>static noinline void phase_compute(int n)
+{
+	int sum = n * 3;
+
+	trace_printk("b2: compute sum=%d\n", sum);
+}
+
+static noinline void phase_emit(int n)
+{
+	trace_printk("b2: emit %d bytes\n", n);
+}</code></pre>
+        </div>
+      </details>
+    </section>
+
+    <section class="panel" id="verify">
+      <div class="panel__head"><span class="panel__id">[04]</span><h2><span class="prefix">$</span> VERIFY</h2></div>
+      <p>Green when the trace shows all three annotations:</p>
+      <ul>
+        <li><code>b2: parse</code> <span class="badge badge--ok">given</span> &middot;
+            <code>b2: compute</code> <span class="badge badge--warn">yours</span> &middot;
+            <code>b2: emit</code> <span class="badge badge--warn">yours</span></li>
+      </ul>
+      <p class="muted">Reset to the unsolved skeleton any time:
+        <code>make reset LESSON=B2-trace-just-what-matters</code></p>
+    </section>
+
+    <section class="panel" id="further">
+      <div class="panel__head"><span class="panel__id">[05]</span><h2><span class="prefix">./</span>FURTHER READING</h2></div>
+      <p class="muted">Canonical references to explore deeper — each opens in a new tab.</p>
+      <ul>
+        <li><a class="ext" href="https://docs.kernel.org/trace/ftrace.html" target="_blank" rel="noopener noreferrer">docs.kernel.org — ftrace</a> — <code>trace_printk</code>, <code>trace_marker</code>, <code>set_ftrace_pid</code>, and the <code>:mod:</code> filter syntax.</li>
+        <li><a class="ext" href="https://docs.kernel.org/trace/index.html" target="_blank" rel="noopener noreferrer">docs.kernel.org — Tracing index</a> — the rest of the tracer and event interfaces Module B builds on.</li>
+      </ul>
+    </section>
+
+  </main>
+
+  <aside class="diagnostics" aria-label="Lesson diagnostics">
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">./</span>diagnostics</h2></div>
+      <div class="kv"><span class="k">lesson</span><span class="v">B2</span></div>
+      <div class="kv"><span class="k">module</span><span class="v">tracing</span></div>
+      <div class="kv"><span class="k">state</span><span class="v"><span class="badge badge--warn">CHALLENGE</span></span></div>
+      <div class="kv"><span class="k">edit</span><span class="v">module/b2_worker.c</span></div>
+      <div class="kv"><span class="k">kernel</span><span class="v">stock (no rebuild)</span></div>
+    </section>
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">&gt;</span> pass markers</h2></div>
+      <div class="kv"><span class="k">parse</span><span class="v">b2: parse (given)</span></div>
+      <div class="kv"><span class="k">compute</span><span class="v">b2: compute (yours)</span></div>
+      <div class="kv"><span class="k">emit</span><span class="v">b2: emit (yours)</span></div>
+    </section>
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">$</span> next</h2></div>
+      <div class="stack">
+        <a class="btn" href="../H1-gdb-the-live-kernel/index.html">LESSON H1 &rarr;</a>
+        <a class="btn btn--dim" href="../B1-follow-the-path/index.html">&larr; LESSON B1</a>
+      </div>
+    </section>
+  </aside>
+
+</div>
+</body>
+</html>
