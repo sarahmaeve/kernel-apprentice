@@ -16,22 +16,16 @@ make check LESSON=B2-trace-just-what-matters
 ```
 
 `module/b2_worker.c` exposes `/proc/b2-go`; writing to it runs three phases —
-`parse`, `compute`, `emit`. Only **parse** annotates the trace so far (the worked
-example), so the check is **RED**: the trace is missing `b2: compute` and `b2: emit`.
+`parse`, `compute`, `emit` — but they run in **silence**, so the check is **RED**:
+the trace shows none of `b2: parse`, `b2: compute`, `b2: emit`.
 
 ## The challenge — make every phase narrate the trace
 
-Add a `trace_printk()` to `phase_compute()` and `phase_emit()` so the trace shows a
-line containing **`b2: compute`** and **`b2: emit`** respectively — mirroring the
-`parse` example:
-
-```c
-trace_printk("b2: parse %d bytes\n", n);   /* already there, in phase_parse */
-```
-
-`trace_printk()` writes into the trace ring buffer (`/sys/kernel/tracing/trace`), not
-the kernel log — cheap enough to leave in a hot path while you debug, and it shows up
-inline with the function trace and your `trace_marker` notes.
+Make each phase write a line to the trace ring buffer (`/sys/kernel/tracing/trace`)
+carrying its marker — **`b2: parse`**, **`b2: compute`**, **`b2: emit`**. Writing to
+the trace buffer is the cheap, hot-path-safe alternative to flooding the kernel log,
+and the line shows up inline with the function trace and your `trace_marker` notes.
+The graduated hints below cover the *how* if you need it.
 
 ## The isolation toolkit (the recipe the check runs)
 
@@ -47,21 +41,28 @@ moment" — with your `trace_printk` notes threaded through.
 
 ## Touch — graduated hints
 
-<details><summary>Hint 1 — where do the annotations go?</summary>
+<details><summary>Hint 1 — what writes to the trace buffer?</summary>
 
-In `module/b2_worker.c`, `phase_compute()` and `phase_emit()` have a
-`TODO(B2)` where the `trace_printk()` should go. `phase_parse()` shows the shape.
+`printk` would flood the kernel log; the trace buffer's own printf is
+**`trace_printk()`** — same format args as `printk`, but it lands in
+`/sys/kernel/tracing/trace`. One call per phase is all you need
+(`#include <linux/kernel.h>` is already there).
 </details>
 
-<details><summary>Hint 2 — what must the line contain?</summary>
+<details><summary>Hint 2 — what must each line contain?</summary>
 
-The check greps the trace for the literal substrings `b2: compute` and `b2: emit`.
-Your format string must contain those — e.g. `trace_printk("b2: compute sum=%d\n", n*3);`.
+The check greps the trace for the literal substrings `b2: parse`, `b2: compute`, and
+`b2: emit`. Each phase's format string must contain its marker.
 </details>
 
 <details><summary>Hint 3 — the solution</summary>
 
 ```c
+static noinline void phase_parse(int n)
+{
+	trace_printk("b2: parse %d bytes\n", n);
+}
+
 static noinline void phase_compute(int n)
 {
 	int sum = n * 3;

@@ -7,9 +7,9 @@
 #   * trace_marker        userspace brackets the run from inside the trace
 #   * tracing_on          enable/disable around the window
 # Grades:
-#   PASS iff the trace shows all three trace_printk annotations: "b2: parse",
-#        "b2: compute", "b2: emit". The shipped module only does "parse" (the
-#        worked example), so it's RED until you annotate compute + emit.
+#   PASS iff the trace shows all three markers: "b2: parse", "b2: compute",
+#        "b2: emit". The shipped module emits none of them, so it's RED until you
+#        instrument all three phases.
 
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -75,11 +75,10 @@ logf="$work/serial.log"
 
 # Each phase must narrate the trace via trace_printk.
 for m in "b2: parse" "b2: compute" "b2: emit"; do
-  grep -q "$m" "$logf" || die "the trace is missing \"$m\" — annotate that phase with
-     trace_printk() in module/b2_worker.c (see README). 'parse' is the worked example;
-     'compute' and 'emit' are yours. (log: $logf)"
+  grep -q "$m" "$logf" || die "the trace is missing \"$m\" — make that phase write it in
+     module/b2_worker.c (the lesson hints show how). (log: $logf)"
 done
-ok "all three phases narrate the trace via trace_printk (b2: parse / compute / emit)"
+ok "all three phases narrate the trace (b2: parse / compute / emit)"
 
 grep -q "phase_compute" "$logf" \
   && ok "the per-module filter (:mod:b2_worker) isolated the worker's own functions"
