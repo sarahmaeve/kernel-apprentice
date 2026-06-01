@@ -1,10 +1,11 @@
 # POTENTIAL-CURRICULUM.md — the full apprenticeship
 
 *A living planning doc, like [DESIGN.md](DESIGN.md) — meant to be argued with, not
-treated as fixed. It sketches how the apprentice arc (lessons 01–04 + the first
-Wheel scenario, all built and green) grows into a full curriculum that **supplants
-the existing kernel-debugging courses and books** — with a live, breakable kernel
-and automated PASS/FAIL instead of lectures.*
+treated as fixed. It sketches how the apprentice arc — now **10 lessons and two Wheel
+scenarios built** across modules A, B, C, E, G and H (01–07, H1, C1–C2, plus the
+Works-on-my-laptop and Mystery-OOM-kill Wheels) — grows into a full curriculum that
+**supplants the existing kernel-debugging courses and books** — with a live, breakable
+kernel and automated PASS/FAIL instead of lectures.*
 
 ---
 
@@ -106,9 +107,9 @@ the Udemy course is ftrace-specific, so it isn't needed to supplant it.*
 
 | Lesson | State | Absorbs / notes |
 |---|---|---|
-| C1 Read an OOM report | READY 🔲 | oom_score, `/proc/meminfo`, cgroup limit |
-| C2 KASAN catches you | CHALLENGE 🔲 | use-after-free / OOB module; read the report, fix it |
-| **Wheel — Mystery OOM kill** | LIVE FIRE 🔲 | undersized cgroup + workload |
+| C1 Read an OOM report | READY ✅ | oom_score, `/proc/meminfo`, cgroup limit (reuses base `CONFIG_MEMCG`) |
+| C2 KASAN catches you | CHALLENGE ✅ *(optional)* | three bugs — out-of-bounds + use-after-free + double-free; read each report, fix it. Runs on a **dedicated KASAN kernel** (`make kasan-kernel`), opt-in and off the graded count |
+| **Wheel — Mystery OOM kill** | LIVE FIRE ✅ | undersized cgroup + workload; grades on `constraint=CONSTRAINT_MEMCG` |
 
 ### D · Concurrency, Locking & Hangs
 | Lesson | State | Absorbs / notes |
@@ -122,9 +123,9 @@ the Udemy course is ftrace-specific, so it isn't needed to supplant it.*
 | Lesson | State | Absorbs / notes |
 |---|---|---|
 | E0 Anatomy of an oops | READY 🔲 | dissect a real oops field-by-field: BUG vs WARN vs panic, `UD2`, taint flags, RIP, call trace, registers; decode RIP → file:line (`faddr2line`, `decode_stacktrace.sh`) |
-| 05 The driver that oopses | CHALLENGE 🔲 | apply E0 — trigger, read, find, fix a NULL / copy_from_user bug |
+| 05 The driver that oopses | CHALLENGE ✅ | apply E0 — trigger, read, find, fix a NULL-deref bug |
 | E1 Post-mortem with `crash` | READY 🔲 | kexec/kdump → `/proc/vmcore` → `crash` `bt`/`ps`/`struct`; ORC unwinder |
-| **Wheel — The driver that oopses** | LIVE FIRE 🔲 | intermediate; optional KASAN overlay |
+| **Wheel — The driver that oopses** | LIVE FIRE 🔲 | intermediate; the KASAN overlay kernel (built for C2) is available |
 
 *(The Babka deck spends ~25 slides on E0 alone — reading an oops cleanly is a whole
 lesson, and the prerequisite for everything else in this module.)*
@@ -140,8 +141,8 @@ lesson, and the prerequisite for everything else in this module.)*
 
 | Lesson | State | Absorbs / notes |
 |---|---|---|
-| 06 Instrument it yourself | CHALLENGE 🔲 | implement a `/proc` stat or kprobe counter to spec |
-| 07 A character device with ioctl | CHALLENGE 🔲 | open/read/write/ioctl so a userspace test passes |
+| 06 Instrument it yourself | CHALLENGE ✅ | implement a kprobe counter exposed via `/proc` |
+| 07 A character device with ioctl | CHALLENGE ✅ | open/read/write/ioctl so a userspace test passes |
 | G1 Patch to test a fix | CHALLENGE 🔲 | fix a confirmed Wheel bug — "I changed the actual kernel" |
 
 ### H · Interactive & live debugging  — *leverages our QEMU harness (a differentiator)*
@@ -149,7 +150,7 @@ lesson, and the prerequisite for everything else in this module.)*
 
 | Lesson | State | Absorbs / notes |
 |---|---|---|
-| H1 Step through the live kernel with gdb | READY 🔲 | QEMU's gdbstub (`-s`): break on `__do_sys_getpid`, inspect locals — source-level kernel debugging, free |
+| H1 Step through the live kernel with gdb | READY ✅ | QEMU's gdbstub (`-s`): break on `__do_sys_getpid`, inspect locals — source-level kernel debugging, free |
 | H2 The panic button — SysRq | READY 🔲 | `/proc/sysrq-trigger`: dump tasks (`t`), CPU stacks (`l`), blocked (`w`), memory (`m`) — pull state from a wedged box |
 | H3 kgdb / kdb over serial | READY 🔲 | `kgdboc=ttyS0`, `sysrq-g`, kdb in-kernel (advanced; QEMU's gdbstub usually beats it) |
 
@@ -179,12 +180,18 @@ the catalog doesn't need re-teaching.
 
 ## 6. Suggested build order
 
-1. **G — 06, 07** (your hands-on priority): bank the CHALLENGE lessons.
+*Status so far: A, the first half of B (02/04), C (all of it), E (05), G (06/07) and
+H1 are built — 10 lessons and 2 Wheels across six modules. The opt-in KASAN overlay
+kernel and `make reset` are built too. Remaining priorities below.*
+
+1. **G — 06, 07** ✅ done.
 2. **B — B1–B4 + its Wheel**: the flagship tracing track and the most direct supplant
    of the Udemy/LFD445 ftrace material. Needs a small base-config bump (the
    latency/stack/profiler/hist tracers listed under §B) — cheap, done once.
-3. **E — 05**: the oops-fix; pairs with the driver Wheel.
-4. **C / D**: memory + locking, each gated behind a KASAN / lockdep config overlay.
+3. **E — 05** ✅ done (the oops-fix); the driver Wheel (E) is still 🔲.
+4. **C / D**: **C done** (C1 / C2 / Wheel — KASAN ships as `make kasan-kernel`, a
+   separate opt-in kernel rather than a base-config change). **D** (locking) is next,
+   gated behind a lockdep / KCSAN overlay.
 5. **F**: networking last — it needs the most extra guest plumbing.
 
 ## 7. Conventions (how a new lesson is added)
@@ -193,11 +200,15 @@ the catalog doesn't need re-teaching.
   reading), `check.sh`, source/starter files, and a CRT-phosphor `index.html`.
 - Wire it into `harness/check.sh` (dispatcher), `harness/gen-status.sh` (the N/total
   count), the root `index.html` curriculum table + legend, and the inter-lesson nav.
-- **CHALLENGE** lessons ship buggy/skeleton code on `main` (so the check is red); the
-  completed version lives on a `solutions` branch (DESIGN §5), with the final answer
-  as the last graduated hint.
-- Heavy debug configs ship as **per-module config overlays**, not in the base kernel
-  (they slow every boot): KASAN, UBSAN, KCSAN, lockdep, `DEBUG_KMEMLEAK`,
-  `SLUB_DEBUG`, `DEBUG_PAGEALLOC` / page-poisoning. Module E also needs `crash` +
-  kdump (`kexec-tools`, `makedumpfile`) added to the workbench image.
+- **CHALLENGE** lessons ship buggy/skeleton code on `main` (so the check is red), with
+  the fix as the last graduated hint. `make reset [LESSON=…]` restores any solved
+  lesson to its committed skeleton — git-restore for repo edits, re-extract for
+  kernel-tree edits — and clears its pass-record, so prototyping and re-attempting are
+  cheap (no `solutions` branch needed, as first sketched).
+- Heavy debug configs stay out of the base kernel (they slow every boot). The
+  established pattern (see C2) is a **separate opt-in kernel build** —
+  `harness/build-kasan-kernel.sh` / `make kasan-kernel`, booted via the `KERNEL_IMAGE`
+  override — rather than a base-config change; the same approach fits UBSAN, KCSAN,
+  lockdep, `DEBUG_KMEMLEAK`, `SLUB_DEBUG`, `DEBUG_PAGEALLOC`. Module E also needs
+  `crash` + kdump (`kexec-tools`, `makedumpfile`) added to the workbench image.
 - Every external reference is verified to resolve before it's committed.
