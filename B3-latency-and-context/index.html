@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>B3 // latency and context</title>
+<meta name="description" content="The kernel's latency tracers: irqsoff + the latency-format context flags, the function profiler, the stack tracer, snapshot, and dump-on-oops.">
+<!-- IBM Plex Mono self-hosted via @font-face in crt.css -->
+<link rel="stylesheet" href="../assets/crt.css">
+</head>
+<body>
+<div class="app">
+
+  <header class="statusline">
+    <span class="live"><span class="prefix">&gt;</span> lesson B3 // latency and context<span class="cursor" aria-hidden="true"></span></span>
+    <span class="meta">[ observe &middot; read &middot; touch ]</span>
+  </header>
+
+  <nav class="rail" aria-label="Sections">
+    <span class="label">./lesson B3</span>
+    <nav>
+      <a class="navlink" href="#observe" aria-current="true">observe</a>
+      <a class="navlink" href="#read">read</a>
+      <a class="navlink" href="#touch">touch</a>
+      <a class="navlink" href="#numbers">on the numbers</a>
+      <a class="navlink" href="#verify">verify</a>
+      <a class="navlink" href="#further">further reading</a>
+    </nav>
+    <span class="label" style="margin-top:var(--space-lg)">./source</span>
+    <nav>
+      <a class="navlink" href="../index.html">&larr; command index</a>
+      <a class="navlink" href="README.md">README.md</a>
+      <a class="navlink" href="check.sh">check.sh</a>
+    </nav>
+  </nav>
+
+  <main class="workspace">
+
+    <section class="panel panel--hero" id="observe">
+      <h1><span class="prefix">$</span> B3 ./latency-and-context</h1>
+      <p class="tagline">what stalled — and in what context</p>
+      <p>B1 followed the path; B2 cut the noise. B3 is about <strong>time and context</strong>: the
+        kernel's purpose-built tracers for "longest time with interrupts off?", "which functions are
+        hot?", "how close to a stack overflow?" — and the <strong>latency format</strong> that decodes
+        the state (irqs off? in a hardirq? preemption disabled?) of every line.</p>
+      <div class="term"><div class="line cmd">make check LESSON=B3-latency-and-context</div></div>
+      <p class="callout" style="margin-top:var(--space-md)"><strong>First lesson that needs the
+        Module B tracers.</strong> Built your kernel before Module B? The check detects it and tells
+        you to run <code>make kernel</code>. (B1/B2 run on the stock kernel; B3/B4 need the rebuild.)</p>
+    </section>
+
+    <section class="panel" id="read">
+      <div class="panel__head"><span class="panel__id">[01]</span><h2><span class="prefix">./</span>READ &mdash; the four views</h2></div>
+
+      <h3 style="margin-top:var(--space-sm)">A &mdash; irqsoff latency tracer + the context flags</h3>
+      <p><code>echo irqsoff &gt; current_tracer</code> records the <strong>single longest region the
+        kernel ran with interrupts disabled</strong>, and the path that caused it:</p>
+<pre class="code" data-lang="text"><code># tracer: irqsoff
+# latency: 37347 us, #68/68, CPU#0 | (M:PREEMPT(voluntary) ... #P:2)
+#  =&gt; started at: irqentry_enter
+#  =&gt; ended at:   irqentry_exit
+#                  _-----=&gt; irqs-off/BH-disabled
+#                 / _----=&gt; need-resched
+#                | / _---=&gt; hardirq/softirq
+#                || / _--=&gt; preempt-depth
+#  cmd  pid      ||| /  delay  |  caller</code></pre>
+      <p>That legend is the <strong>latency format</strong> — the "context" half of the lesson. Every
+        line carries these flags:</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>flag</th><th>means</th></tr></thead>
+          <tbody>
+            <tr><td><code>d</code></td><td><strong>irqs off</strong> (interrupts disabled)</td></tr>
+            <tr><td><code>h</code> / <code>s</code></td><td>in a <strong>hardirq</strong> / <strong>softirq</strong></td></tr>
+            <tr><td><code>N</code></td><td><strong>need-resched</strong> — a higher-prio task is waiting</td></tr>
+            <tr><td>digit</td><td><strong>preempt-depth</strong> — nested <code>preempt_disable()</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="muted">Reading the flags tells "slow path <em>with interrupts off</em>" (bad — it
+        delayed every IRQ) from "slow but preemptible" (usually fine). Siblings: swap in
+        <code>preemptoff</code>, <code>preemptirqsoff</code>, or <code>wakeup_rt</code>.</p>
+
+      <h3>B &mdash; function profiler: what's hot</h3>
+      <p><code>echo 1 &gt; function_profile_enabled</code> counts + times every function; read
+        <code>trace_stat/function&lt;cpu&gt;</code>:</p>
+<pre class="code" data-lang="text"><code>  Function          Hit    Time            Avg
+  schedule          923    20703657 us     22430.83 us
+  do_idle           866    5806523 us      6704.992 us
+  schedule_timeout  645    5398054 us      8369.076 us</code></pre>
+      <p class="muted"><code>Hit</code> = call count, <code>Time</code> = total. (An idle guest is all
+        <code>schedule</code>/<code>do_idle</code> — the scheduler parking the CPU.)</p>
+
+      <h3>C &mdash; stack tracer: how close to the edge</h3>
+      <p><code>echo 1 &gt; /proc/sys/kernel/stack_tracer_enabled</code> remembers the
+        <strong>deepest kernel stack ever seen</strong>, frame by frame:</p>
+<pre class="code" data-lang="text"><code>        Depth    Size   Location    (11 entries)
+  0)     2712      48   rcu_segcblist_enqueue+0x9/0x50
+  4)     2464    1128   mas_wr_bnode+0xb50/0x24c0      <span class="cm">&lt;- 1128 bytes in one frame</span>
+  6)     1216     768   __mmap_region+0x766/0xe10
+  9)      224      48   do_syscall_64+0xb4/0x350</code></pre>
+      <p class="muted">The kernel stack is small and fixed; a fat frame or runaway recursion can
+        overflow it and corrupt memory. The stack tracer finds the worst offender before it bites.</p>
+
+      <h3>D &mdash; snapshot, and dump-on-oops</h3>
+      <p><code>echo 1 &gt; snapshot</code> atomically swaps the live ring buffer into a
+        <strong>snapshot</strong> buffer — freeze "the last N events" while tracing keeps running. Its
+        crash-time cousin, <code>echo 1 &gt; /proc/sys/kernel/ftrace_dump_on_oops</code>, dumps the
+        buffer to the console on a panic — the last thing that happened before death, with no disk.</p>
+    </section>
+
+    <section class="panel" id="touch">
+      <div class="panel__head"><span class="panel__id">[02]</span><h2><span class="prefix">./</span>TOUCH &mdash; try the others</h2></div>
+<pre class="code" data-lang="sh"><code>T=/sys/kernel/tracing
+echo wakeup_rt  &gt; $T/current_tracer ; cat $T/tracing_max_latency   <span class="cm"># scheduling latency</span>
+echo preemptoff &gt; $T/current_tracer                                <span class="cm"># preempt-off regions</span>
+cat $T/trace_stat/function*                                       <span class="cm"># full profiler, all CPUs</span></code></pre>
+    </section>
+
+    <section class="panel panel--warn" id="numbers">
+      <div class="panel__head"><span class="panel__id">[!]</span><h2 style="font-size:1.05rem"><span class="prefix">&gt;</span> on the numbers</h2></div>
+      <p>You're on an emulated (TCG) guest, so absolute times are <strong>wildly inflated</strong> — a
+        37&nbsp;ms "irqs-off" latency would be alarming on real hardware (microseconds is normal). The
+        skill B3 teaches is <em>reading</em> these tools — the worst region, its path, the context
+        flags, the hot functions, the deepest stack — not trusting the emulator's clock.</p>
+    </section>
+
+    <section class="panel" id="verify">
+      <div class="panel__head"><span class="panel__id">[03]</span><h2><span class="prefix">$</span> VERIFY</h2></div>
+      <p>Green when the log shows all three tracers' output:</p>
+      <ul>
+        <li>the <strong>irqsoff</strong> latency trace <span class="badge badge--ok">LATENCY</span></li>
+        <li>the <strong>function profiler</strong> table <span class="badge badge--ok">PROFILE</span></li>
+        <li>the <strong>stack tracer</strong> breakdown <span class="badge badge--ok">STACK</span></li>
+      </ul>
+    </section>
+
+    <section class="panel" id="further">
+      <div class="panel__head"><span class="panel__id">[04]</span><h2><span class="prefix">./</span>FURTHER READING</h2></div>
+      <p class="muted">Canonical references to explore deeper — each opens in a new tab.</p>
+      <ul>
+        <li><a class="ext" href="https://docs.kernel.org/trace/ftrace.html" target="_blank" rel="noopener noreferrer">docs.kernel.org — ftrace</a> — the latency tracers (<code>irqsoff</code>/<code>preemptoff</code>/<code>wakeup</code>), the latency-format flags, <code>function_profile_enabled</code>, the stack tracer, and <code>snapshot</code>.</li>
+        <li><a class="ext" href="https://docs.kernel.org/trace/index.html" target="_blank" rel="noopener noreferrer">docs.kernel.org — Tracing index</a> — the rest of the tracer and event interfaces, including the events B4 uses.</li>
+      </ul>
+    </section>
+
+  </main>
+
+  <aside class="diagnostics" aria-label="Lesson diagnostics">
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">./</span>diagnostics</h2></div>
+      <div class="kv"><span class="k">lesson</span><span class="v">B3</span></div>
+      <div class="kv"><span class="k">module</span><span class="v">tracing</span></div>
+      <div class="kv"><span class="k">state</span><span class="v"><span class="badge badge--info">READY</span></span></div>
+      <div class="kv"><span class="k">needs</span><span class="v">Module B tracers (make kernel)</span></div>
+      <div class="kv"><span class="k">surface</span><span class="v">latency tracers &middot; profiler &middot; stack</span></div>
+    </section>
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">&gt;</span> pass markers</h2></div>
+      <div class="kv"><span class="k">latency</span><span class="v">tracer: irqsoff</span></div>
+      <div class="kv"><span class="k">profile</span><span class="v">Function &middot; Hit</span></div>
+      <div class="kv"><span class="k">stack</span><span class="v">Depth &middot; Size &middot; Location</span></div>
+    </section>
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">$</span> next</h2></div>
+      <div class="stack">
+        <a class="btn" href="../H1-gdb-the-live-kernel/index.html">LESSON H1 &rarr;</a>
+        <a class="btn btn--dim" href="../B2-trace-just-what-matters/index.html">&larr; LESSON B2</a>
+      </div>
+    </section>
+  </aside>
+
+</div>
+</body>
+</html>
