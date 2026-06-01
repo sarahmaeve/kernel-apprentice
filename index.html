@@ -135,6 +135,12 @@
               <td><span class="badge badge--info">READY</span></td>
             </tr>
             <tr>
+              <td><a href="B1-follow-the-path/index.html">B1</a></td>
+              <td>follow the path</td>
+              <td>function_graph, wildcard filters, and func_stack_trace — what calls what, live</td>
+              <td><span class="badge badge--info">READY</span></td>
+            </tr>
+            <tr>
               <td><a href="H1-gdb-the-live-kernel/index.html">H1</a></td>
               <td>step through the live kernel with gdb</td>
               <td>break into a running kernel function via QEMU's gdbstub — no rebuild</td>
@@ -222,6 +228,10 @@
         the build is a single command and the kernel is cached for good.</p>
       <p class="muted"><code>make help</code> lists every target;
         <code>make check</code> with no <code>LESSON</code> runs them all.</p>
+      <p class="muted"><strong>Pulled new lessons?</strong> Some add kernel config — e.g.
+        <strong>Module B (tracing)</strong> enables the latency / stack / profiler / histogram
+        tracers its later lessons need. Re-run <code>make kernel</code> once to pick it up: it
+        re-merges the config and rebuilds incrementally (a near no-op when nothing changed).</p>
     </section>
 
     <section class="panel" id="workbench">

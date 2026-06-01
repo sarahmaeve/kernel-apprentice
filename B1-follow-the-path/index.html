@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>B1 // follow the path</title>
+<meta name="description" content="Drive live ftrace to answer what-calls-what: function_graph, set_ftrace_filter wildcards, func_stack_trace, trace vs trace_pipe.">
+<!-- IBM Plex Mono self-hosted via @font-face in crt.css -->
+<link rel="stylesheet" href="../assets/crt.css">
+</head>
+<body>
+<div class="app">
+
+  <header class="statusline">
+    <span class="live"><span class="prefix">&gt;</span> lesson B1 // follow the path<span class="cursor" aria-hidden="true"></span></span>
+    <span class="meta">[ observe &middot; read &middot; touch ]</span>
+  </header>
+
+  <nav class="rail" aria-label="Sections">
+    <span class="label">./lesson B1</span>
+    <nav>
+      <a class="navlink" href="#observe" aria-current="true">observe</a>
+      <a class="navlink" href="#read">read</a>
+      <a class="navlink" href="#touch">touch</a>
+      <a class="navlink" href="#verify">verify</a>
+      <a class="navlink" href="#further">further reading</a>
+    </nav>
+    <span class="label" style="margin-top:var(--space-lg)">./source</span>
+    <nav>
+      <a class="navlink" href="../index.html">&larr; command index</a>
+      <a class="navlink" href="README.md">README.md</a>
+      <a class="navlink" href="trigger.c">trigger.c</a>
+      <a class="navlink" href="check.sh">check.sh</a>
+    </nav>
+  </nav>
+
+  <main class="workspace">
+
+    <section class="panel panel--hero" id="observe">
+      <h1><span class="prefix">$</span> B1 ./follow-the-path</h1>
+      <p class="tagline">what calls what — on a live kernel, no rebuild</p>
+      <p>Lesson 04 proved the kernel will narrate one function. B1 teaches you to follow that
+        narration through the <strong>call graph</strong> and back to the <strong>caller</strong> —
+        the foundation of the whole tracing track. Four moves, all <code>echo</code>-into-tracefs.</p>
+      <div class="term"><div class="line cmd">make check LESSON=B1-follow-the-path</div></div>
+      <p class="muted" style="margin-top:var(--space-md)">Everything runs against
+        <code>/sys/kernel/tracing</code> on the live kernel — nothing is compiled in.</p>
+      <p class="callout" style="margin-top:var(--space-md)"><strong>Module B note —</strong> B1 and B2
+        run on the stock kernel, but <strong>B3 (latency) and B4 (histograms) need extra tracers
+        compiled in</strong>. If you built your kernel before Module B landed, run
+        <code>make kernel</code> once to pick them up (incremental).</p>
+    </section>
+
+    <section class="panel" id="read">
+      <div class="panel__head"><span class="panel__id">[01]</span><h2><span class="prefix">./</span>READ &mdash; the four moves</h2></div>
+
+      <h3 style="margin-top:var(--space-sm)">A &mdash; function_graph: the call graph</h3>
+<pre class="code" data-lang="text"><code> # CPU  DURATION              FUNCTION CALLS
+ 1)               |  __do_sys_getpid() {
+ 1)   0.180 us    |    __task_pid_nr_ns();
+ 1)   0.940 us    |  }</code></pre>
+      <p class="muted">The <code>{ … }</code> nesting <em>is</em> the path; <code>DURATION</code> is
+        where time went. getpid is shallow on purpose — graph <code>vfs_*</code> for real depth.</p>
+
+      <h3>B &mdash; set_ftrace_filter, with a wildcard</h3>
+<pre class="code" data-lang="sh"><code>echo '*getpid*' &gt; set_ftrace_filter   <span class="cm"># resolves against available_filter_functions</span>
+__x64_sys_getpid
+__do_sys_getpid</code></pre>
+
+      <h3>C &mdash; who calls it (func_stack_trace)</h3>
+<pre class="code" data-lang="text"><code>   __do_sys_getpid &lt;-__x64_sys_getpid   <span class="cm">&lt;- the '&lt;-' column is the immediate caller</span>
+ =&gt; __do_sys_getpid
+ =&gt; __x64_sys_getpid
+ =&gt; do_syscall_64                       <span class="cm">&lt;- the whole chain, back to the syscall entry</span>
+ =&gt; entry_SYSCALL_64_after_hwframe</code></pre>
+
+      <h3>D &mdash; trace vs trace_pipe</h3>
+      <p><code>cat trace</code> is a re-readable snapshot of the ring buffer; <code>cat trace_pipe</code>
+        <em>consumes</em> as it streams. Knowing which to use is half of not losing your data.</p>
+    </section>
+
+    <section class="panel" id="touch">
+      <div class="panel__head"><span class="panel__id">[02]</span><h2><span class="prefix">./</span>TOUCH &mdash; re-aim it yourself</h2></div>
+      <p>In <code>make shell</code>, boot a guest and point the tracer somewhere new:</p>
+<pre class="code" data-lang="sh"><code>T=/sys/kernel/tracing
+echo function_graph &gt; $T/current_tracer
+echo 'vfs_*'        &gt; $T/set_graph_function        <span class="cm"># graph the VFS layer</span>
+grep -c .           $T/available_filter_functions  <span class="cm"># how many functions you *could* trace</span>
+echo '*alloc*'      &gt; $T/set_ftrace_filter         <span class="cm"># a different wildcard</span></code></pre>
+    </section>
+
+    <section class="panel" id="verify">
+      <div class="panel__head"><span class="panel__id">[03]</span><h2><span class="prefix">$</span> VERIFY</h2></div>
+      <p>Green when the captured log shows:</p>
+      <ul>
+        <li>the <strong>function_graph</strong> call path <span class="badge badge--ok">GRAPH</span></li>
+        <li>a <strong>func_stack_trace</strong> caller stack <span class="badge badge--ok">CALLER</span></li>
+      </ul>
+      <p class="muted">i.e. you can follow the path down <em>and</em> trace it back up.</p>
+    </section>
+
+    <section class="panel" id="further">
+      <div class="panel__head"><span class="panel__id">[04]</span><h2><span class="prefix">./</span>FURTHER READING</h2></div>
+      <p class="muted">Canonical references to explore deeper — each opens in a new tab.</p>
+      <ul>
+        <li><a class="ext" href="https://docs.kernel.org/trace/ftrace.html" target="_blank" rel="noopener noreferrer">docs.kernel.org — ftrace</a> — the reference for <code>current_tracer</code>, <code>set_ftrace_filter</code>, <code>function_graph</code>, <code>func_stack_trace</code>, and <code>trace</code> vs <code>trace_pipe</code>.</li>
+        <li><a class="ext" href="https://docs.kernel.org/trace/index.html" target="_blank" rel="noopener noreferrer">docs.kernel.org — Tracing index</a> — the map of every tracer and event interface the rest of Module B builds on.</li>
+      </ul>
+    </section>
+
+  </main>
+
+  <aside class="diagnostics" aria-label="Lesson diagnostics">
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">./</span>diagnostics</h2></div>
+      <div class="kv"><span class="k">lesson</span><span class="v">B1</span></div>
+      <div class="kv"><span class="k">module</span><span class="v">tracing</span></div>
+      <div class="kv"><span class="k">state</span><span class="v"><span class="badge badge--info">READY</span></span></div>
+      <div class="kv"><span class="k">surface</span><span class="v">ftrace &middot; tracefs</span></div>
+      <div class="kv"><span class="k">builds on</span><span class="v">04 (the kernel narrates itself)</span></div>
+    </section>
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">&gt;</span> pass markers</h2></div>
+      <div class="kv"><span class="k">graph</span><span class="v">__do_sys_getpid()</span></div>
+      <div class="kv"><span class="k">caller</span><span class="v">=&gt; do_syscall_64</span></div>
+    </section>
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">$</span> next</h2></div>
+      <div class="stack">
+        <a class="btn" href="../H1-gdb-the-live-kernel/index.html">LESSON H1 &rarr;</a>
+        <a class="btn btn--dim" href="../04-kernel-narrates-itself/index.html">&larr; LESSON 04</a>
+      </div>
+    </section>
+  </aside>
+
+</div>
+</body>
+</html>
