@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WHEEL // fast except sometimes</title>
+<meta name="description" content="LIVE FIRE: a service with a great median and an awful p99 — find the tail-latency cause with function_graph.">
+<!-- IBM Plex Mono self-hosted via @font-face in crt.css -->
+<link rel="stylesheet" href="../../assets/crt.css">
+</head>
+<body>
+<div class="app">
+
+  <header class="statusline">
+    <span class="live"><span class="prefix">&gt;</span> wheel // fast except sometimes<span class="cursor" aria-hidden="true"></span></span>
+    <span class="meta">[ live fire &middot; tail latency ]</span>
+  </header>
+
+  <nav class="rail" aria-label="Sections">
+    <span class="label">./wheel</span>
+    <nav>
+      <a class="navlink" href="#page" aria-current="true">the page</a>
+      <a class="navlink" href="#run">run</a>
+      <a class="navlink" href="#job">your job</a>
+      <a class="navlink" href="#hints">graduated hints</a>
+      <a class="navlink" href="#postmortem">post-mortem</a>
+      <a class="navlink" href="#further">further reading</a>
+    </nav>
+    <span class="label" style="margin-top:var(--space-lg)">./source</span>
+    <nav>
+      <a class="navlink" href="../../index.html">&larr; command index</a>
+      <a class="navlink" href="README.md">README.md</a>
+      <a class="navlink" href="slowsvc.c">slowsvc.c</a>
+      <a class="navlink" href="check.sh">check.sh</a>
+    </nav>
+  </nav>
+
+  <main class="workspace">
+
+    <section class="panel panel--fail" id="page">
+      <h1><span class="prefix">$</span> WHEEL ./fast-except-sometimes <span class="badge badge--fail">LIVE FIRE</span></h1>
+      <p class="tagline">great median, catastrophic p99</p>
+      <div class="term" role="group" aria-label="The page">
+        <div class="line out">PAGE: slowsvc p99 = 20ms (p50 = 2us). a few requests/hour just hang.</div>
+        <div class="line out">      CPU idle. memory fine. no errors in the log.</div>
+        <div class="line cmt"># find out why some requests are slow.</div>
+      </div>
+      <p style="margin-top:var(--space-md)">The "service" is <code>/proc/slowsvc</code>; each read is a
+        request. Most are instant; a minority are <strong>ten-thousand times</strong> slower — and the
+        averages hide it. This is the capstone of the tracing track: B1–B4 were drills; this is the call.</p>
+    </section>
+
+    <section class="panel" id="run">
+      <div class="panel__head"><span class="panel__id">[01]</span><h2><span class="prefix">$</span> RUN THE SCENARIO</h2></div>
+      <div class="term"><div class="line cmd">make check LESSON=wheel/fast-except-sometimes</div></div>
+      <p class="muted" style="margin-top:var(--space-md)">It loads the service, sends 10 requests under
+        a tracer, and shows you the evidence.</p>
+    </section>
+
+    <section class="panel" id="job">
+      <div class="panel__head"><span class="panel__id">[02]</span><h2><span class="prefix">./</span>YOUR JOB</h2></div>
+      <p>Most requests are instant; a minority are catastrophically slow, and the averages hide it.
+        <strong>Find which code path the slow requests take, and why</strong> — with the Module B tools,
+        <em>not</em> by reading <code>slowsvc.c</code>. (In a real incident you start with the trace,
+        not the source.)</p>
+      <p class="muted">The trick with tail latency: a flat function trace or a profiler <em>average</em>
+        won't show it — you have to look at requests <strong>one at a time</strong> and catch the slow
+        one in the act.</p>
+    </section>
+
+    <section class="panel" id="hints">
+      <div class="panel__head"><span class="panel__id">[03]</span><h2><span class="prefix">./</span>GRADUATED HINTS</h2></div>
+      <details class="hint"><summary>Hint 1 — how do I see per-request latency, not an average?</summary>
+        <div class="hint__body">
+          <p style="margin:0 0 var(--space-sm)"><code>function_graph</code> times each call. Scope it to the
+            handler and watch every request:</p>
+<pre class="code" data-lang="sh"><code>T=/sys/kernel/tracing
+echo slowsvc_read   &gt; $T/set_graph_function
+echo function_graph &gt; $T/current_tracer
+echo 1 &gt; $T/tracing_on
+for i in $(seq 1 10); do cat /proc/slowsvc &gt;/dev/null; done
+cat $T/trace</code></pre>
+        </div>
+      </details>
+      <details class="hint"><summary>Hint 2 — what am I looking for in the graph?</summary>
+        <div class="hint__body"><p style="margin:0">Most <code>slowsvc_read()</code> calls return in
+          single-digit microseconds. Some take <strong>thousands</strong> — and unlike the fast ones,
+          the slow ones aren't leaves: they <em>call into something</em>. Read what's nested under the
+          slow call.</p></div>
+      </details>
+      <details class="hint"><summary>Hint 3 — the cause</summary>
+        <div class="hint__body"><p style="margin:0">The slow requests detour through a <strong>sleep</strong>:
+          <code>slowsvc_read() → msleep() → schedule_timeout() → schedule()</code>. The handler blocks on
+          those requests; the CPU is idle (that's why utilization looked fine) but the <em>request</em>
+          waits ~20&nbsp;ms.</p></div>
+      </details>
+    </section>
+
+    <section class="panel" id="postmortem">
+      <div class="panel__head"><span class="panel__id">[04]</span><h2><span class="prefix">./</span>POST-MORTEM</h2></div>
+      <details class="hint"><summary>open after you've driven it — ground truth + the lesson</summary>
+        <div class="hint__body">
+          <p style="margin:0 0 var(--space-sm)"><code>slowsvc_read()</code> counts requests and, on
+            <strong>every 5th</strong> one, sleeps 20&nbsp;ms:</p>
+<pre class="code" data-lang="c"><code>if (++reqs % 5 == 0)
+        msleep(20);</code></pre>
+          <p style="margin:var(--space-sm) 0">So 20% of requests sleep while the other 80% are instant —
+            a bimodal distribution <em>any average hides</em>. <code>function_graph</code> exposes it
+            because it times each request individually and shows the <code>msleep</code> detour.</p>
+          <p style="margin:0"><strong>The lesson:</strong> tail latency lives in the requests you didn't
+            average. When p50 is great but p99 is awful and the box looks idle, something is
+            <em>blocking</em> a fraction of requests — trace per-request (<code>function_graph</code>) or
+            measure the distribution (a hist trigger, B4); never trust the mean. The same shape shows up
+            for real as a lock occasionally contended, a cache miss that hits disk, or a periodic kthread
+            stealing the CPU.</p>
+        </div>
+      </details>
+      <p class="muted" style="margin-top:var(--space-md)"><strong>Graded:</strong> the check confirms the
+        symptom reproduces and the diagnostic path works — <code>function_graph</code> localizes the slow
+        requests to a sleep inside <code>slowsvc_read()</code>. In a real on-call setting a human (or an
+        LLM on-call lead) grades <em>your</em> evidence and root-cause line.</p>
+    </section>
+
+    <section class="panel" id="further">
+      <div class="panel__head"><span class="panel__id">[05]</span><h2><span class="prefix">./</span>FURTHER READING</h2></div>
+      <p class="muted">Canonical references to explore deeper — each opens in a new tab.</p>
+      <ul>
+        <li><a class="ext" href="https://docs.kernel.org/trace/ftrace.html" target="_blank" rel="noopener noreferrer">docs.kernel.org — ftrace</a> — <code>function_graph</code> (per-call durations), <code>set_graph_function</code>, and the latency tracers for chasing tail latency.</li>
+        <li><a class="ext" href="https://www.brendangregg.com/HeatMaps/latency.html" target="_blank" rel="noopener noreferrer">Brendan Gregg — Latency Heat Maps</a> — why averages hide tail latency, and how to see the whole distribution.</li>
+      </ul>
+    </section>
+
+  </main>
+
+  <aside class="diagnostics" aria-label="Scenario diagnostics">
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">./</span>diagnostics</h2></div>
+      <div class="kv"><span class="k">scenario</span><span class="v">fast-except-sometimes</span></div>
+      <div class="kv"><span class="k">module</span><span class="v">tracing (caps B)</span></div>
+      <div class="kv"><span class="k">state</span><span class="v"><span class="badge badge--fail">LIVE FIRE</span></span></div>
+      <div class="kv"><span class="k">symptom</span><span class="v">p50 2us / p99 20ms</span></div>
+      <div class="kv"><span class="k">tool</span><span class="v">function_graph (B1/B3)</span></div>
+    </section>
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">&gt;</span> evidence</h2></div>
+      <div class="kv"><span class="k">handler</span><span class="v">slowsvc_read()</span></div>
+      <div class="kv"><span class="k">tail</span><span class="v">msleep &rarr; schedule_timeout</span></div>
+    </section>
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">$</span> next</h2></div>
+      <div class="stack">
+        <a class="btn" href="../../index.html">COMMAND INDEX &rarr;</a>
+        <a class="btn btn--dim" href="../../B4-events-and-histograms/index.html">&larr; LESSON B4</a>
+      </div>
+    </section>
+  </aside>
+
+</div>
+</body>
+</html>

@@ -28,6 +28,7 @@ LESSONS=(
   C1-read-an-oom-report
   wheel/works-on-my-laptop
   wheel/mystery-oom-kill
+  wheel/fast-except-sometimes
 )
 
 ensure_kernel
