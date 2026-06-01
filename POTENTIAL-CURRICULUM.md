@@ -1,9 +1,10 @@
 # POTENTIAL-CURRICULUM.md — the full apprenticeship
 
 *A living planning doc, like [DESIGN.md](DESIGN.md) — meant to be argued with, not
-treated as fixed. It sketches how the apprentice arc — now **10 lessons and two Wheel
-scenarios built** across modules A, B, C, E, G and H (01–07, H1, C1–C2, plus the
-Works-on-my-laptop and Mystery-OOM-kill Wheels) — grows into a full curriculum that
+treated as fixed. It sketches how the apprentice arc — now **14 lessons and three Wheel
+scenarios built** across modules A, B, C, E, G and H (01–07, H1, B1–B4, C1–C2, plus the
+Works-on-my-laptop, Mystery-OOM-kill and Fast-except-sometimes Wheels) — grows into a
+full curriculum that
 **supplants the existing kernel-debugging courses and books** — with a live, breakable
 kernel and automated PASS/FAIL instead of lectures.*
 
@@ -87,20 +88,22 @@ and push the exhaustive breadth to Further-reading.*
 |---|---|---|
 | 02 printk and the ring buffer | READY ✅ | log levels, the ring buffer |
 | 04 The kernel narrates itself | READY ✅ | ftrace function tracer + kprobe intro |
-| B1 Follow the path | READY 🔲 | function + function_graph, set_ftrace_filter, wildcards, "who calls X", trace vs trace_pipe |
-| B2 Trace just what matters | CHALLENGE 🔲 | set_ftrace_pid, per-module filter, trace_printk, trace_marker, enable/disable |
-| B3 Latency & context | READY 🔲 | irqsoff/preempt/wakeup latency tracers, context flags, function profiler, stack tracer, snapshot, ftrace-dump-on-oops |
-| B4 Events & histograms | CHALLENGE 🔲 | tracepoint events interface, format/filter/triggers, **hist triggers**, sched/irq/net/fs events, set_event_pid |
-| **Wheel — Fast except sometimes** | LIVE FIRE 🔲 | p99 latency; B3 feeds straight into it |
+| B1 Follow the path | READY ✅ | function + function_graph, set_ftrace_filter, wildcards, "who calls X", trace vs trace_pipe |
+| B2 Trace just what matters | CHALLENGE ✅ | set_ftrace_pid, per-module filter, trace_printk, trace_marker, enable/disable |
+| B3 Latency & context | READY ✅ | irqsoff/preempt/wakeup latency tracers, context flags, function profiler, stack tracer, snapshot, ftrace-dump-on-oops |
+| B4 Events & histograms | CHALLENGE ✅ | tracepoint events interface, format/filter/triggers, **hist triggers**, sched/irq/net/fs events, set_event_pid |
+| **Wheel — Fast except sometimes** | LIVE FIRE ✅ | p99 / tail latency, localized with function_graph |
 
 *Frontends (`trace-cmd`, `bpftrace`, `perf`) are introduced as the ergonomic layer
 over the raw tracefs **within** B1–B4, not a separate lesson. A dedicated **perf /
 eBPF** sub-track (sampling profiles, flame graphs, libbpf) is a later extension —
 the Udemy course is ftrace-specific, so it isn't needed to supplant it.*
 
-*Config: B needs a few cheap tracers enabled in the base kernel —
+*Config: B's later lessons need a few cheap tracers in the base kernel —
 `FUNCTION_GRAPH_TRACER`, `IRQSOFF_TRACER`, `PREEMPT_TRACER`, `SCHED_TRACER`,
-`STACK_TRACER`, `FUNCTION_PROFILER`, `HIST_TRIGGERS` — added when we build the track.*
+`STACK_TRACER`, `FUNCTION_PROFILER`, `HIST_TRIGGERS` — **now added** (see
+`harness/config/tutorial.config`). B1/B2 run on the stock kernel; B3/B4 want the
+rebuild, and their checks self-detect a stale kernel and say `make kernel`.*
 
 ### C · Memory
 *Goal: diagnose memory misbehavior from the report, not a guess.*
@@ -180,14 +183,15 @@ the catalog doesn't need re-teaching.
 
 ## 6. Suggested build order
 
-*Status so far: A, the first half of B (02/04), C (all of it), E (05), G (06/07) and
-H1 are built — 10 lessons and 2 Wheels across six modules. The opt-in KASAN overlay
-kernel and `make reset` are built too. Remaining priorities below.*
+*Status so far: A, **all of B** (02/04 + B1–B4 + its Wheel), C (all of it), E (05),
+G (06/07) and H1 are built — 14 lessons and 3 Wheels across six modules. The opt-in
+KASAN overlay kernel, the Module B tracer config, and `make reset` are built too.
+Remaining priorities below.*
 
 1. **G — 06, 07** ✅ done.
-2. **B — B1–B4 + its Wheel**: the flagship tracing track and the most direct supplant
-   of the Udemy/LFD445 ftrace material. Needs a small base-config bump (the
-   latency/stack/profiler/hist tracers listed under §B) — cheap, done once.
+2. **B — B1–B4 + its Wheel** ✅ done (the flagship tracing track — the most direct
+   supplant of the Udemy/LFD445 ftrace material; the base-config tracer bump shipped
+   with it).
 3. **E — 05** ✅ done (the oops-fix); the driver Wheel (E) is still 🔲.
 4. **C / D**: **C done** (C1 / C2 / Wheel — KASAN ships as `make kasan-kernel`, a
    separate opt-in kernel rather than a base-config change). **D** (locking) is next,
