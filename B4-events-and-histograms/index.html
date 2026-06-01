@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>B4 // events and histograms</title>
+<meta name="description" content="CHALLENGE: read a tracepoint's format and aggregate every syscall with a hist trigger keyed by id.">
+<!-- IBM Plex Mono self-hosted via @font-face in crt.css -->
+<link rel="stylesheet" href="../assets/crt.css">
+</head>
+<body>
+<div class="app">
+
+  <header class="statusline">
+    <span class="live"><span class="prefix">&gt;</span> lesson B4 // events and histograms<span class="cursor" aria-hidden="true"></span></span>
+    <span class="meta">[ challenge &middot; ask a question ]</span>
+  </header>
+
+  <nav class="rail" aria-label="Sections">
+    <span class="label">./lesson B4</span>
+    <nav>
+      <a class="navlink" href="#observe" aria-current="true">observe</a>
+      <a class="navlink" href="#interface">events interface</a>
+      <a class="navlink" href="#challenge">challenge</a>
+      <a class="navlink" href="#hints">hints</a>
+      <a class="navlink" href="#verify">verify</a>
+      <a class="navlink" href="#further">further reading</a>
+    </nav>
+    <span class="label" style="margin-top:var(--space-lg)">./source</span>
+    <nav>
+      <a class="navlink" href="../index.html">&larr; command index</a>
+      <a class="navlink" href="README.md">README.md</a>
+      <a class="navlink" href="trigger.hist">trigger.hist</a>
+      <a class="navlink" href="check.sh">check.sh</a>
+    </nav>
+  </nav>
+
+  <main class="workspace">
+
+    <section class="panel panel--hero" id="observe">
+      <h1><span class="prefix">$</span> B4 ./events-and-histograms</h1>
+      <p class="tagline">ask a question; the kernel counts the answer</p>
+      <p>B1–B3 traced <em>functions</em>. But the kernel also exposes <strong>tracepoints</strong> —
+        stable, named, structured events with typed fields — and can <strong>aggregate them
+        in-kernel</strong> with <strong>hist triggers</strong>, a tiny query language that turns a
+        million events into a sorted table of counts. No userspace, no overhead.</p>
+      <div class="term"><div class="line cmd">make check LESSON=B4-events-and-histograms</div></div>
+      <p class="muted" style="margin-top:var(--space-md)">The shipped <code>trigger.hist</code> keys
+        by <code>___</code> — not a real field — so the kernel rejects it and there's no histogram:
+        <span class="badge badge--warn">RED</span> until you key it right.</p>
+      <p class="callout" style="margin-top:var(--space-md)"><strong>Needs the Module B kernel.</strong>
+        The check detects a stale one and tells you to <code>make kernel</code>.</p>
+    </section>
+
+    <section class="panel" id="interface">
+      <div class="panel__head"><span class="panel__id">[01]</span><h2><span class="prefix">./</span>THE EVENTS INTERFACE</h2></div>
+      <p>Every tracepoint lives under <code>/sys/kernel/tracing/events/&lt;subsystem&gt;/&lt;event&gt;/</code>:</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>file</th><th>what it is</th></tr></thead>
+          <tbody>
+            <tr><td><code>format</code></td><td>the event's <strong>fields</strong> + types — read this to know what you can key/filter on</td></tr>
+            <tr><td><code>enable</code></td><td><code>echo 1</code> to start recording</td></tr>
+            <tr><td><code>filter</code></td><td>a predicate, e.g. <code>echo 'id == 257' &gt; filter</code> (only <code>openat</code>)</td></tr>
+            <tr><td><code>trigger</code></td><td>attach actions — including <strong>histograms</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="muted" style="margin-top:var(--space-md)">Subsystems: <code>syscalls</code> /
+        <code>raw_syscalls</code>, <code>sched</code>, <code>irq</code>, <code>net</code>,
+        <code>block</code>, <code>ext4</code>. <code>set_event_pid</code> scopes all events to one
+        task (like <code>set_ftrace_pid</code> did for functions).</p>
+    </section>
+
+    <section class="panel" id="challenge">
+      <div class="panel__head"><span class="panel__id">[02]</span><h2><span class="prefix">./</span>THE CHALLENGE</h2></div>
+      <p><code>raw_syscalls/sys_enter</code> fires on <strong>every syscall</strong> and carries an
+        <code>id</code> field (the syscall number). In <code>trigger.hist</code>, write a hist trigger
+        that <strong>buckets by syscall id</strong>. A hist trigger is a one-liner —
+        <code>hist:keys=&lt;field&gt;:sort=&lt;field&gt;</code> — and once it's right the run produces:</p>
+<pre class="code" data-lang="text"><code># trigger info: hist:keys=id:vals=hitcount:sort=hitcount [active]
+
+{ id:          0 } hitcount:         17     <span class="cm">&lt;- read(2)</span>
+{ id:        257 } hitcount:         18     <span class="cm">&lt;- openat(2)</span>
+{ id:         16 } hitcount:         16     <span class="cm">&lt;- ioctl(2)</span>
+...
+Totals:
+    Hits: 600
+    Entries: 30</code></pre>
+      <p class="muted">Pick a tracepoint, pick a key, read the table. Two keys for a breakdown;
+        <code>:sort=hitcount</code> to rank; a <code>filter</code> to scope.</p>
+    </section>
+
+    <section class="panel" id="hints">
+      <div class="panel__head"><span class="panel__id">[03]</span><h2><span class="prefix">./</span>GRADUATED HINTS</h2></div>
+      <details class="hint"><summary>Hint 1 — what can I key on?</summary>
+        <div class="hint__body"><p style="margin:0">A hist key must be a <em>field</em> of the event.
+          List them: <code>cat /sys/kernel/tracing/events/raw_syscalls/sys_enter/format</code> — the
+          lines starting <code>field:</code>.</p></div>
+      </details>
+      <details class="hint"><summary>Hint 2 — which field is the syscall number?</summary>
+        <div class="hint__body"><p style="margin:0">It's <code>id</code> (a <code>long</code>). The other
+          field is <code>args</code> (the syscall's arguments).</p></div>
+      </details>
+      <details class="hint"><summary>Hint 3 — the solution</summary>
+        <div class="hint__body">
+<pre class="code" data-lang="text"><code>hist:keys=id:sort=hitcount</code></pre>
+          <p style="margin:0">Put that line in <code>trigger.hist</code> (replacing the
+          <code>keys=___</code> placeholder).</p></div>
+      </details>
+    </section>
+
+    <section class="panel" id="verify">
+      <div class="panel__head"><span class="panel__id">[04]</span><h2><span class="prefix">$</span> VERIFY</h2></div>
+      <p>Green when the histogram is bucketed by syscall id — rows like
+        <code>{ id: N } hitcount: M</code>.</p>
+      <p class="muted">Reset to the unsolved skeleton any time:
+        <code>make reset LESSON=B4-events-and-histograms</code></p>
+    </section>
+
+    <section class="panel" id="further">
+      <div class="panel__head"><span class="panel__id">[05]</span><h2><span class="prefix">./</span>FURTHER READING</h2></div>
+      <p class="muted">Canonical references to explore deeper — each opens in a new tab.</p>
+      <ul>
+        <li><a class="ext" href="https://docs.kernel.org/trace/events.html" target="_blank" rel="noopener noreferrer">docs.kernel.org — Event Tracing</a> — <code>format</code>, <code>enable</code>, <code>filter</code>, <code>trigger</code>, and <code>set_event_pid</code>.</li>
+        <li><a class="ext" href="https://docs.kernel.org/trace/histogram.html" target="_blank" rel="noopener noreferrer">docs.kernel.org — Histogram Triggers</a> — the full hist-trigger language: keys, values, sort, stacktrace keys, synthetic events.</li>
+      </ul>
+    </section>
+
+  </main>
+
+  <aside class="diagnostics" aria-label="Lesson diagnostics">
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">./</span>diagnostics</h2></div>
+      <div class="kv"><span class="k">lesson</span><span class="v">B4</span></div>
+      <div class="kv"><span class="k">module</span><span class="v">tracing</span></div>
+      <div class="kv"><span class="k">state</span><span class="v"><span class="badge badge--warn">CHALLENGE</span></span></div>
+      <div class="kv"><span class="k">edit</span><span class="v">trigger.hist</span></div>
+      <div class="kv"><span class="k">needs</span><span class="v">Module B kernel (make kernel)</span></div>
+    </section>
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">&gt;</span> pass marker</h2></div>
+      <div class="kv"><span class="k">histogram</span><span class="v">{ id: N } hitcount: M</span></div>
+    </section>
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">$</span> next</h2></div>
+      <div class="stack">
+        <a class="btn" href="../H1-gdb-the-live-kernel/index.html">LESSON H1 &rarr;</a>
+        <a class="btn btn--dim" href="../B3-latency-and-context/index.html">&larr; LESSON B3</a>
+      </div>
+    </section>
+  </aside>
+
+</div>
+</body>
+</html>

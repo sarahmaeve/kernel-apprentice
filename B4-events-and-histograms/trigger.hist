@@ -1,0 +1,6 @@
+# B4 — a hist trigger on the raw_syscalls/sys_enter tracepoint (fires on every syscall).
+#
+# Goal: a histogram of how many times each syscall NUMBER fired during the run.
+# TODO(B4): set the key field below so the buckets are per syscall id.
+#           (Which field? `cat .../sys_enter/format` lists them; or open the hints.)
+hist:keys=___:sort=hitcount

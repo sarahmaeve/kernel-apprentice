@@ -20,6 +20,7 @@ LESSONS=(
   B1-follow-the-path
   B2-trace-just-what-matters
   B3-latency-and-context
+  B4-events-and-histograms
   H1-gdb-the-live-kernel
   06-instrument-it-yourself
   05-the-driver-that-oopses
