@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>H2 // sysrq — the panic button</title>
+<meta name="description" content="Pull task, memory and CPU state out of a wedged box with SysRq; read a D-state thread's stack; then crash the kernel on purpose.">
+<!-- IBM Plex Mono self-hosted via @font-face in crt.css -->
+<link rel="stylesheet" href="../assets/crt.css">
+</head>
+<body>
+<div class="app">
+
+  <header class="statusline">
+    <span class="live"><span class="prefix">&gt;</span> lesson H2 // sysrq — the panic button<span class="cursor" aria-hidden="true"></span></span>
+    <span class="meta">[ observe &middot; read &middot; touch ]</span>
+  </header>
+
+  <nav class="rail" aria-label="Sections">
+    <span class="label">./lesson H2</span>
+    <nav>
+      <a class="navlink" href="#observe" aria-current="true">observe</a>
+      <a class="navlink" href="#read">read</a>
+      <a class="navlink" href="#touch">touch</a>
+      <a class="navlink" href="#verify">verify</a>
+      <a class="navlink" href="#further">further reading</a>
+    </nav>
+    <span class="label" style="margin-top:var(--space-lg)">./source</span>
+    <nav>
+      <a class="navlink" href="../index.html">&larr; command index</a>
+      <a class="navlink" href="README.md">README.md</a>
+      <a class="navlink" href="module/h2_wedge.c">module/h2_wedge.c</a>
+      <a class="navlink" href="check.sh">check.sh</a>
+    </nav>
+  </nav>
+
+  <main class="workspace">
+
+    <section class="panel panel--hero" id="observe">
+      <h1><span class="prefix">$</span> H2 ./sysrq-the-panic-button</h1>
+      <p class="tagline">the kernel's emergency intercom</p>
+      <p>When a box is so wedged that ssh is dead and nothing in userspace answers, one listener
+        remains: the kernel itself. <strong>SysRq</strong> turns single letters into state dumps on
+        the console, no matter how bad things are. A module parks a kthread in <strong>D state</strong>
+        on purpose — the "<code>kill -9</code> does nothing" state — and you pull its location out of
+        the kernel. Then you press the real panic button.</p>
+      <div class="term"><div class="line cmd">make check LESSON=H2-sysrq-the-panic-button</div></div>
+      <p class="muted" style="margin-top:var(--space-md)">The check walks
+        <code>t</code> (every task: state + stack), <code>w</code> (only the blocked/D tasks — the
+        first letter you press on a wedged box), <code>m</code> (memory state) and <code>l</code>
+        (backtraces of all active CPUs) via <code>/proc/sysrq-trigger</code>. On real hardware these
+        are keyboard chords or serial-console breaks — which is why they work when nothing else does.
+        The <code>kernel.sysrq</code> mask gates only the keyboard path; a root write to the
+        <code>/proc</code> trigger always works.</p>
+    </section>
+
+    <section class="panel" id="read">
+      <div class="panel__head"><span class="panel__id">[01]</span><h2><span class="prefix">./</span>READ &mdash; the D state, and where it sleeps</h2></div>
+<pre class="code" data-lang="text"><code>sysrq: Show Blocked State
+task:h2-wedged       state:D stack:15000 pid:66    tgid:66    ppid:2      ...
+Call Trace:
+ &lt;TASK&gt;
+ __schedule+0x4e3/0xf80
+ ? __pfx_h2_wedge_fn+0x10/0x10 [h2_wedge]
+ ? h2_wedge_fn+0x42/0x50 [h2_wedge]
+ schedule+0x41/0x1a0
+ h2_wedge_fn+0x42/0x50 [h2_wedge]
+ kthread+0x10a/0x200
+ ret_from_fork+0x17e/0x1a0</code></pre>
+      <ul>
+        <li><strong><code>state:D</code></strong> — <code>TASK_UNINTERRUPTIBLE</code>: not runnable, and signals — <code>kill -9</code> included — stay pending until it next runs, <em>which is exactly what it won't do</em>. Fleeting around I/O normally; a task that <em>stays</em> D is the classic wedged-box symptom.</li>
+        <li><strong><code>ppid:2</code></strong> — parent is <code>kthreadd</code>, mother of all kernel threads: not a userspace process at all.</li>
+        <li><strong>the trace, top down</strong> — <code>__schedule</code>/<code>schedule</code> is <em>how</em> it sleeps; the first real frame below — <strong><code>h2_wedge_fn</code></strong> — is <em>who chose to</em>. <code>?</code> frames are stack leftovers (E0); <code>__pfx_*</code> is function padding — skip both.</li>
+      </ul>
+    </section>
+
+    <section class="panel" id="touch">
+      <div class="panel__head"><span class="panel__id">[02]</span><h2><span class="prefix">./</span>TOUCH &mdash; the stack file, then the button</h2></div>
+<pre class="code" data-lang="text"><code>$ cat /proc/66/stack          <span class="cm"># scheduler frames filtered for you</span>
+[&lt;0&gt;] h2_wedge_fn+0x42/0x50 [h2_wedge]
+[&lt;0&gt;] kthread+0x10a/0x200
+[&lt;0&gt;] ret_from_fork+0x17e/0x1a0
+
+$ echo c &gt; /proc/sysrq-trigger
+sysrq: Trigger a crash
+Kernel panic - not syncing: sysrq triggered crash
+CPU: 1 UID: 0 PID: 1 Comm: init Tainted: G    O    6.18.33 #8 ...</code></pre>
+      <p class="muted"><code>/proc/&lt;pid&gt;/stack</code> (root-only) is the fastest answer to
+        "<em>where</em> is this process stuck?" — top frame = the function that went to sleep.
+        And <code>c</code> panics the kernel <em>on command</em>, in whatever context pressed the
+        button (<code>Comm: init</code> — our init script). Nothing survives; QEMU exits
+        (<code>panic=-1</code> + <code>-no-reboot</code>). With kdump configured, this is how a
+        hung box becomes a corpse you can autopsy — lesson E1, planned.</p>
+    </section>
+
+    <section class="panel" id="verify">
+      <div class="panel__head"><span class="panel__id">[03]</span><h2><span class="prefix">$</span> VERIFY</h2></div>
+      <p>Green when the captured log contains:</p>
+      <ul>
+        <li>all four dumps — Show State / Blocked State / Memory / CPU backtraces <span class="badge badge--ok">DUMPS</span></li>
+        <li><code>h2-wedged</code> in <code>state:D</code>, with <code>h2_wedge_fn</code> named in a stack <span class="badge badge--ok">WEDGE</span></li>
+        <li>the panic — <code>Kernel panic - not syncing</code> <span class="badge badge--ok">BUTTON</span></li>
+      </ul>
+    </section>
+
+    <section class="panel" id="further">
+      <div class="panel__head"><span class="panel__id">[04]</span><h2><span class="prefix">./</span>FURTHER READING</h2></div>
+      <p class="muted">Canonical references to explore deeper — each opens in a new tab.</p>
+      <ul>
+        <li><a class="ext" href="https://docs.kernel.org/admin-guide/sysrq.html" target="_blank" rel="noopener noreferrer">docs.kernel.org — Linux Magic System Request Key Hacks</a> — every letter, the keyboard chords per architecture, the enable mask.</li>
+        <li><a class="ext" href="https://docs.kernel.org/admin-guide/sysctl/kernel.html" target="_blank" rel="noopener noreferrer">docs.kernel.org — Documentation for /proc/sys/kernel/</a> — <code>sysrq</code>, <code>panic</code>, <code>panic_on_oops</code>, <code>hung_task_*</code>: the knobs around this lesson.</li>
+      </ul>
+    </section>
+
+  </main>
+
+  <aside class="diagnostics" aria-label="Lesson diagnostics">
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">./</span>diagnostics</h2></div>
+      <div class="kv"><span class="k">lesson</span><span class="v">H2</span></div>
+      <div class="kv"><span class="k">module</span><span class="v">live debugging</span></div>
+      <div class="kv"><span class="k">state</span><span class="v"><span class="badge badge--info">READY</span></span></div>
+      <div class="kv"><span class="k">surface</span><span class="v">sysrq t/w/m/l/c &middot; /proc/&lt;pid&gt;/stack</span></div>
+      <div class="kv"><span class="k">pairs with</span><span class="v">D (hangs, planned) &middot; E1 (kdump, planned)</span></div>
+    </section>
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">&gt;</span> pass markers</h2></div>
+      <div class="kv"><span class="k">dumps</span><span class="v">t &middot; w &middot; m &middot; l banners</span></div>
+      <div class="kv"><span class="k">wedge</span><span class="v">task:h2-wedged state:D</span></div>
+      <div class="kv"><span class="k">button</span><span class="v">Kernel panic - not syncing</span></div>
+    </section>
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">$</span> next</h2></div>
+      <div class="stack">
+        <a class="btn" href="../06-instrument-it-yourself/index.html">LESSON 06 &rarr;</a>
+        <a class="btn btn--dim" href="../H1-gdb-the-live-kernel/index.html">&larr; LESSON H1</a>
+      </div>
+    </section>
+  </aside>
+
+</div>
+</body>
+</html>

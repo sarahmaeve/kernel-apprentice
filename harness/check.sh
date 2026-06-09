@@ -22,6 +22,7 @@ LESSONS=(
   B3-latency-and-context
   B4-events-and-histograms
   H1-gdb-the-live-kernel
+  H2-sysrq-the-panic-button
   06-instrument-it-yourself
   E0-anatomy-of-an-oops
   05-the-driver-that-oopses

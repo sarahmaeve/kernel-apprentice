@@ -42,7 +42,7 @@ fi
 if [ -f "$BZIMAGE" ]; then ker_label=OK; ker_kind=ok; else ker_label=PENDING; ker_kind=warn; fi
 
 # lessons green: count pass-records written by harness/check.sh
-lessons=(01-syscall-is-the-door 02-printk-and-ring-buffer 03-proc-is-code 04-kernel-narrates-itself B1-follow-the-path B2-trace-just-what-matters B3-latency-and-context B4-events-and-histograms H1-gdb-the-live-kernel 06-instrument-it-yourself E0-anatomy-of-an-oops 05-the-driver-that-oopses 07-char-device-with-ioctl C1-read-an-oom-report wheel/works-on-my-laptop wheel/mystery-oom-kill wheel/fast-except-sometimes)
+lessons=(01-syscall-is-the-door 02-printk-and-ring-buffer 03-proc-is-code 04-kernel-narrates-itself B1-follow-the-path B2-trace-just-what-matters B3-latency-and-context B4-events-and-histograms H1-gdb-the-live-kernel H2-sysrq-the-panic-button 06-instrument-it-yourself E0-anatomy-of-an-oops 05-the-driver-that-oopses 07-char-device-with-ioctl C1-read-an-oom-report wheel/works-on-my-laptop wheel/mystery-oom-kill wheel/fast-except-sometimes)
 pass=0
 for l in "${lessons[@]}"; do
   [ -f "$CHECKS/$(echo "$l" | tr / _).pass" ] && pass=$((pass+1))

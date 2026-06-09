@@ -1,8 +1,8 @@
 # POTENTIAL-CURRICULUM.md — the full apprenticeship
 
 *A living planning doc, like [DESIGN.md](DESIGN.md) — meant to be argued with, not
-treated as fixed. It sketches how the apprentice arc — now **15 lessons and three Wheel
-scenarios built** across modules A, B, C, E, G and H (01–07, E0, H1, B1–B4, C1–C2, plus the
+treated as fixed. It sketches how the apprentice arc — now **16 lessons and three Wheel
+scenarios built** across modules A, B, C, E, G and H (01–07, E0, H1–H2, B1–B4, C1–C2, plus the
 Works-on-my-laptop, Mystery-OOM-kill and Fast-except-sometimes Wheels) — grows into a
 full curriculum that
 **supplants the existing kernel-debugging courses and books** — with a live, breakable
@@ -154,7 +154,7 @@ lesson, and the prerequisite for everything else in this module.)*
 | Lesson | State | Absorbs / notes |
 |---|---|---|
 | H1 Step through the live kernel with gdb | READY ✅ | QEMU's gdbstub (`-s`): break on `__do_sys_getpid`, inspect locals — source-level kernel debugging, free |
-| H2 The panic button — SysRq | READY 🔲 | `/proc/sysrq-trigger`: dump tasks (`t`), CPU stacks (`l`), blocked (`w`), memory (`m`) — pull state from a wedged box |
+| H2 The panic button — SysRq | READY ✅ | `/proc/sysrq-trigger`: dump tasks (`t`), CPU stacks (`l`), blocked (`w`), memory (`m`) — pull state from a wedged box; a module parks a kthread in D state so there's something wedged to find, and `c` ends it |
 | H3 kgdb / kdb over serial | READY 🔲 | `kgdboc=ttyS0`, `sysrq-g`, kdb in-kernel (advanced; QEMU's gdbstub usually beats it) |
 
 *Why a module of its own: the Babka deck shows kgdb setup is fiddly; QEMU's built-in
@@ -184,7 +184,7 @@ the catalog doesn't need re-teaching.
 ## 6. Suggested build order
 
 *Status so far: A, **all of B** (02/04 + B1–B4 + its Wheel), C (all of it), E (E0 + 05),
-G (06/07) and H1 are built — 15 lessons and 3 Wheels across six modules. The opt-in
+G (06/07) and H1–H2 are built — 16 lessons and 3 Wheels across six modules. The opt-in
 KASAN overlay kernel, the Module B tracer config, and `make reset` are built too.
 Remaining priorities below.*
 
