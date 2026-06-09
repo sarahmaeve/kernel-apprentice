@@ -215,8 +215,10 @@ Remaining priorities below.*
   expects the check to PASS, and restores the skeleton: the regression test that the
   lesson is still *solvable* after a kernel bump / config / harness change (`make
   check` on main only exercises the red side). Keep patch and final hint showing the
-  same code. (Lesson 01 — a kernel-tree edit — isn't covered yet; C2's solved-check
-  is skipped unless its KASAN kernel is built.)
+  same code. Lessons with a `.reset-kernel` manifest (01) get the kernel-tree flavor:
+  patch applied to `$KERNEL_SRC`, restore by re-extract + rebuild — two incremental
+  kernel rebuilds, skippable with `FAST=1`. C2's solved-check is skipped unless its
+  KASAN kernel is built.
 - Heavy debug configs stay out of the base kernel (they slow every boot). The
   established pattern (see C2) is a **separate opt-in kernel build** —
   `harness/build-kasan-kernel.sh` / `make kasan-kernel`, booted via the `KERNEL_IMAGE`

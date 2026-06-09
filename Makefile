@@ -77,8 +77,8 @@ initramfs: image ## Build the base BusyBox initramfs
 check: image ## Run lesson check(s): make check LESSON=01-syscall-is-the-door (omit = all)
 	$(RUN) harness/check.sh $(LESSON); rc=$$?; $(RUN) harness/gen-status.sh; exit $$rc
 
-check-solved: image ## Verify CHALLENGE lessons are still solvable: apply committed solutions, check, restore
-	$(RUN) harness/check-solved.sh $(LESSON)
+check-solved: image ## Verify CHALLENGE lessons are still solvable (FAST=1 skips lesson 01's kernel rebuilds)
+	$(RUN) harness/check-solved.sh $(if $(FAST),--no-kernel-edits) $(LESSON)
 
 status: image ## Regenerate the dashboard's live status (assets/status.js, gitignored)
 	$(RUN) harness/gen-status.sh
