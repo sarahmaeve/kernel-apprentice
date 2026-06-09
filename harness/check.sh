@@ -23,6 +23,7 @@ LESSONS=(
   B4-events-and-histograms
   H1-gdb-the-live-kernel
   06-instrument-it-yourself
+  E0-anatomy-of-an-oops
   05-the-driver-that-oopses
   07-char-device-with-ioctl
   C1-read-an-oom-report

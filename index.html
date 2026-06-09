@@ -14,7 +14,7 @@
   <!-- ===== top status line ===== -->
   <header class="statusline">
     <span class="live"><span class="prefix">&gt;</span> system: <span data-status-line>phase-1 authored &middot; awaiting sha256 pin + first build</span><span class="cursor" aria-hidden="true"></span></span>
-    <span class="meta">[ kernel 6.18.33 LTS ] [ x86_64 ] [ 2026-05-31 ]</span>
+    <span class="meta">[ kernel 6.18.33 LTS ] [ x86_64 ] [ 2026-06-09 ]</span>
   </header>
 
   <!-- ===== left rail ===== -->
@@ -101,7 +101,7 @@
     <section class="panel" id="curriculum">
       <div class="panel__head">
         <span class="panel__id">[03]</span>
-        <h2><span class="prefix">./</span>CURRICULUM &mdash; phase 1 slice</h2>
+        <h2><span class="prefix">./</span>CURRICULUM &mdash; the apprentice arc</h2>
       </div>
       <div class="table-wrap">
         <table>
@@ -169,6 +169,12 @@
               <td>instrument it yourself</td>
               <td>fill a module skeleton so a kprobe counts getpid calls into <code>/proc</code></td>
               <td><span class="badge badge--warn">CHALLENGE</span></td>
+            </tr>
+            <tr>
+              <td><a href="E0-anatomy-of-an-oops/index.html">E0</a></td>
+              <td>anatomy of an oops</td>
+              <td>trigger a WARN / BUG() / NULL-deref oops on purpose; read every field, decode RIP &rarr; file:line</td>
+              <td><span class="badge badge--info">READY</span></td>
             </tr>
             <tr>
               <td><a href="05-the-driver-that-oopses/index.html">05</a></td>

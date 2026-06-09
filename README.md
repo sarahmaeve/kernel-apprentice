@@ -57,12 +57,14 @@ make check LESSON=01-syscall-is-the-door
 
 ```
 DESIGN.md                     the design + rationale (read this)
+POTENTIAL-CURRICULUM.md       the module map + build order (what exists, what's next)
 Dockerfile                    the workbench image
 Makefile                      host-side orchestration (colima + docker)
 harness/                      shared machinery — build kernel, assemble guest, boot, grade
 01-syscall-is-the-door/       lesson 1: find the function behind a syscall and prove it ran
 02-printk-and-ring-buffer/    lesson 2: build a module, watch the kernel log ring buffer
-wheel/works-on-my-laptop/     Wheel of Misfortune: a live, broken box to diagnose
+...                           one directory per lesson — see the curriculum map for the rest
+wheel/                        Wheel of Misfortune: live, broken boxes to diagnose
 ```
 
 Each lesson is a self-contained directory with a `README.md` (lesson + challenge +
@@ -84,5 +86,8 @@ This is meant to be cloned and explored by others, so it's built to be portable:
 
 ## Status
 
-Phase 1 vertical slice (DESIGN §9): the workbench, the harness, lessons 1–2, and
-one Wheel scenario. See `DESIGN.md` for what comes next.
+Well past the Phase 1 vertical slice (DESIGN §9): **15 lessons and three Wheel
+scenarios** are built across modules A (the boundary), B (the full tracing
+track), C (memory), E (oops anatomy + the oops-fix), G (the modification
+capstone) and H (live-kernel gdb). The module map, build order, and what comes
+next live in [POTENTIAL-CURRICULUM.md](POTENTIAL-CURRICULUM.md).

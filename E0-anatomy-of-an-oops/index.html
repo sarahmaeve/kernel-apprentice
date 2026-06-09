@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>E0 // anatomy of an oops</title>
+<meta name="description" content="Trigger a WARN, a BUG() and a NULL-deref oops on purpose; read every field of the reports and decode the RIP to a source line.">
+<!-- IBM Plex Mono self-hosted via @font-face in crt.css -->
+<link rel="stylesheet" href="../assets/crt.css">
+</head>
+<body>
+<div class="app">
+
+  <header class="statusline">
+    <span class="live"><span class="prefix">&gt;</span> lesson E0 // anatomy of an oops<span class="cursor" aria-hidden="true"></span></span>
+    <span class="meta">[ observe &middot; read &middot; touch ]</span>
+  </header>
+
+  <nav class="rail" aria-label="Sections">
+    <span class="label">./lesson E0</span>
+    <nav>
+      <a class="navlink" href="#observe" aria-current="true">observe</a>
+      <a class="navlink" href="#read">read</a>
+      <a class="navlink" href="#touch">touch</a>
+      <a class="navlink" href="#verify">verify</a>
+      <a class="navlink" href="#further">further reading</a>
+    </nav>
+    <span class="label" style="margin-top:var(--space-lg)">./source</span>
+    <nav>
+      <a class="navlink" href="../index.html">&larr; command index</a>
+      <a class="navlink" href="README.md">README.md</a>
+      <a class="navlink" href="module/e0_anatomy.c">module/e0_anatomy.c</a>
+      <a class="navlink" href="check.sh">check.sh</a>
+    </nav>
+  </nav>
+
+  <main class="workspace">
+
+    <section class="panel panel--hero" id="observe">
+      <h1><span class="prefix">$</span> E0 ./anatomy-of-an-oops</h1>
+      <p class="tagline">WARN &middot; BUG &middot; oops — read every field</p>
+      <p>The kernel doesn't fail silently — it <strong>reports</strong>, in a fixed format it has
+        used for decades. A specimen module fails on purpose, three ways, so you can read each
+        shape: a <strong>WARN</strong> ("shouldn't happen" — execution continues), a
+        <strong>BUG()</strong> ("can't continue" — the writer is killed), and a
+        <strong>NULL-deref oops</strong> (a page fault nobody planned). The kernel survives all
+        three; a <em>panic</em> is the fourth rung, where nothing does.</p>
+      <div class="term"><div class="line cmd">make check LESSON=E0-anatomy-of-an-oops</div></div>
+      <p class="muted" style="margin-top:var(--space-md)">The check writes <code>warn</code>,
+        <code>bug</code>, <code>oops</code> into <code>/proc/ka-anatomy</code> (the fatal two from
+        child processes), dumps all three reports, and prints the taint bitmask climbing:
+        <code>4096</code> (O: out-of-tree module) &rarr; <code>+512</code> (W: warned) &rarr;
+        <code>+128</code> (D: died).</p>
+    </section>
+
+    <section class="panel" id="read">
+      <div class="panel__head"><span class="panel__id">[01]</span><h2><span class="prefix">./</span>READ &mdash; the oops, field by field</h2></div>
+<pre class="code" data-lang="text"><code>BUG: kernel NULL pointer dereference, address: 0000000000000000
+#PF: supervisor write access in kernel mode
+#PF: error_code(0x0002) - not-present page
+Oops: Oops: 0002 [#2] SMP NOPTI
+CPU: 0 UID: 0 PID: 72 Comm: busybox Tainted: G      D W  O    6.18.33 #8 PREEMPT(voluntary)
+Tainted: [D]=DIE, [W]=WARN, [O]=OOT_MODULE
+RIP: 0010:e0_write.cold+0x16/0x3f [e0_anatomy]
+Code: ... 48 8b 04 24 &lt;c7&gt; 00 ad de 00 00 e9 7c ff ff ff ...
+RAX: 0000000000000000 RBX: 0000000000000005 RCX: 0000000000000000
+Call Trace:
+ &lt;TASK&gt;
+ proc_reg_write … vfs_write … ksys_write … do_syscall_64
+ &lt;/TASK&gt;
+Modules linked in: e0_anatomy(O)
+---[ end trace 0000000000000000 ]---</code></pre>
+      <ul>
+        <li><strong>headline</strong> — what kind of fault + the address that triggered it (here NULL itself).</li>
+        <li><strong><code>error_code(0x0002)</code></strong> — bit-coded: bit 0 = protection violation (0: page not mapped), bit 1 = write, bit 2 = user mode (0: kernel). Reads: <em>the kernel wrote to an unmapped address</em>.</li>
+        <li><strong><code>[#2]</code></strong> — the die counter; our <code>BUG()</code> was <code>[#1]</code>.</li>
+        <li><strong><code>Tainted: G … D W O</code></strong> — <code>W</code> a WARN fired, <code>O</code> out-of-tree module loaded, <code>D</code> already died once — and the kernel decodes the letters for you on the next line. Always ask what tainted it <em>first</em>.</li>
+        <li><strong><code>RIP: e0_write.cold+0x16/0x3f [e0_anatomy]</code></strong> — where it died: <code>function+offset/size</code>, and in which module. <code>.cold</code> is the compiler parking an unlikely path in a cold sub-function — real reports are full of <code>.cold</code> / <code>.isra.0</code> suffixes; they decode the same way.</li>
+        <li><strong><code>Code:</code></strong> — the faulting instruction in <code>&lt;…&gt;</code>: <code>c7 00 ad de 00 00</code> is <code>movl $0xdead,(%rax)</code> — and <code>RAX</code> is the NULL it wrote through.</li>
+        <li><strong><code>Call Trace:</code></strong> — newest first: the <code>write(2)</code> path into us; <code>?</code> frames are stack leftovers, not confirmed callers.</li>
+        <li><strong><code>Modules linked in:</code></strong> — every loaded module with its own taint mark; when <code>O</code> is set, look here first.</li>
+      </ul>
+      <p class="muted">Mechanism note: on x86 both <code>WARN</code> and <code>BUG()</code> compile to
+        the same <code>ud2</code> trap; a bug-table entry tells the handler which it was — that's why
+        a <code>BUG()</code> reports <code>invalid opcode</code>. The NULL deref is different: the
+        page-fault handler found no mapping at address 0 and declared an oops.</p>
+    </section>
+
+    <section class="panel" id="touch">
+      <div class="panel__head"><span class="panel__id">[02]</span><h2><span class="prefix">./</span>TOUCH &mdash; decode the RIP yourself</h2></div>
+<pre class="code" data-lang="sh"><code>cd /work/E0-anatomy-of-an-oops/module
+/work/harness/.build/linux-6.18.33/scripts/faddr2line e0_anatomy.ko 'e0_write.cold+0x16'
+<span class="cm"># e0_write.cold at /work/E0-anatomy-of-an-oops/module/e0_anatomy.c:53</span></code></pre>
+      <p class="muted">Line 53 is the <code>*nothing = 0xdead;</code> store — to the line. Use the
+        RIP from <em>your</em> log. One wrinkle worth keeping: the report said
+        <code>+0x16/0x3f</code>, but passing the <code>/0x3f</code> makes faddr2line refuse with a
+        <em>size mismatch</em> — for module symbols the kernel estimates size as the gap to the
+        next symbol; drop the <code>/size</code> and it resolves. The module is built with
+        <code>-g</code> so the <code>.ko</code> carries DWARF; for a crash in the kernel proper,
+        point the same script at <code>vmlinux</code> (<code>scripts/decode_stacktrace.sh</code>
+        does whole traces). The check runs this decode at the end — the <code>decoded:</code>
+        line — re-run it by hand so it's yours.</p>
+    </section>
+
+    <section class="panel" id="verify">
+      <div class="panel__head"><span class="panel__id">[03]</span><h2><span class="prefix">$</span> VERIFY</h2></div>
+      <p>Green when the captured log contains:</p>
+      <ul>
+        <li>all three report shapes — WARNING, <code>kernel BUG at</code>, NULL-deref oops <span class="badge badge--ok">SHAPES</span></li>
+        <li>an oops RIP naming <code>e0_write</code>, decoded by <code>faddr2line</code> into <code>e0_anatomy.c</code> <span class="badge badge--ok">DECODE</span></li>
+        <li>a taint trail with <code>W</code> <span class="badge badge--ok">TAINT</span></li>
+      </ul>
+    </section>
+
+    <section class="panel" id="further">
+      <div class="panel__head"><span class="panel__id">[04]</span><h2><span class="prefix">./</span>FURTHER READING</h2></div>
+      <p class="muted">Canonical references to explore deeper — each opens in a new tab.</p>
+      <ul>
+        <li><a class="ext" href="https://docs.kernel.org/admin-guide/bug-hunting.html" target="_blank" rel="noopener noreferrer">docs.kernel.org — Bug hunting</a> — oops decoding end-to-end: locating the bug, <code>objdump</code>/gdb tricks, when reports lie.</li>
+        <li><a class="ext" href="https://docs.kernel.org/admin-guide/tainted-kernels.html" target="_blank" rel="noopener noreferrer">docs.kernel.org — Tainted kernels</a> — every taint letter and bit, and why "tainted" changes what a report is worth.</li>
+      </ul>
+    </section>
+
+  </main>
+
+  <aside class="diagnostics" aria-label="Lesson diagnostics">
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">./</span>diagnostics</h2></div>
+      <div class="kv"><span class="k">lesson</span><span class="v">E0</span></div>
+      <div class="kv"><span class="k">module</span><span class="v">crashes &amp; oops</span></div>
+      <div class="kv"><span class="k">state</span><span class="v"><span class="badge badge--info">READY</span></span></div>
+      <div class="kv"><span class="k">surface</span><span class="v">WARN &middot; BUG() &middot; oops &middot; taint &middot; faddr2line</span></div>
+      <div class="kv"><span class="k">pairs with</span><span class="v">05 — apply it under pressure</span></div>
+    </section>
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">&gt;</span> pass markers</h2></div>
+      <div class="kv"><span class="k">shapes</span><span class="v">WARNING &middot; kernel BUG at &middot; NULL deref</span></div>
+      <div class="kv"><span class="k">decode</span><span class="v">e0_anatomy.c:NN via faddr2line</span></div>
+      <div class="kv"><span class="k">taint</span><span class="v">Tainted: &hellip; W</span></div>
+    </section>
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">$</span> next</h2></div>
+      <div class="stack">
+        <a class="btn" href="../05-the-driver-that-oopses/index.html">LESSON 05 &rarr;</a>
+        <a class="btn btn--dim" href="../06-instrument-it-yourself/index.html">&larr; LESSON 06</a>
+      </div>
+    </section>
+  </aside>
+
+</div>
+</body>
+</html>

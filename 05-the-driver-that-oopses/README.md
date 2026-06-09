@@ -35,7 +35,8 @@ Call Trace:
 
 The **RIP** and the top of the **Call Trace** name the function that crashed:
 `ka_write`, in this module. `address: 0000...0000` says it dereferenced **NULL**.
-Open `ka_write` and ask: *what does it write through, and is that pointer valid?*
+(You dissected this exact format in lesson E0 — apply it.) Open `ka_write` and ask:
+*what does it write through, and is that pointer valid?*
 
 ## Find + fix
 

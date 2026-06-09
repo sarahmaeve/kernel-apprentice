@@ -63,8 +63,9 @@ Call Trace:
  ksys_write</code></pre>
       <p class="muted">The <strong>RIP</strong> and the top of the <strong>Call Trace</strong> name the
         crashing function — <code>ka_write</code>, in this module. <code>address: 0000…0000</code> says
-        it dereferenced <strong>NULL</strong>. Open <code>ka_write</code>: what does it write through,
-        and is that pointer valid?</p>
+        it dereferenced <strong>NULL</strong>. (You dissected this exact format in lesson E0 —
+        apply it.) Open <code>ka_write</code>: what does it write through, and is that pointer
+        valid?</p>
     </section>
 
     <section class="panel" id="fix">
@@ -129,7 +130,7 @@ if (!state-&gt;buf) {
       <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">$</span> next</h2></div>
       <div class="stack">
         <a class="btn" href="../07-char-device-with-ioctl/index.html">LESSON 07 &rarr;</a>
-        <a class="btn btn--dim" href="../06-instrument-it-yourself/index.html">&larr; LESSON 06</a>
+        <a class="btn btn--dim" href="../E0-anatomy-of-an-oops/index.html">&larr; LESSON E0</a>
       </div>
     </section>
   </aside>

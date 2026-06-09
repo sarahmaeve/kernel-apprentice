@@ -1,8 +1,8 @@
 # POTENTIAL-CURRICULUM.md — the full apprenticeship
 
 *A living planning doc, like [DESIGN.md](DESIGN.md) — meant to be argued with, not
-treated as fixed. It sketches how the apprentice arc — now **14 lessons and three Wheel
-scenarios built** across modules A, B, C, E, G and H (01–07, H1, B1–B4, C1–C2, plus the
+treated as fixed. It sketches how the apprentice arc — now **15 lessons and three Wheel
+scenarios built** across modules A, B, C, E, G and H (01–07, E0, H1, B1–B4, C1–C2, plus the
 Works-on-my-laptop, Mystery-OOM-kill and Fast-except-sometimes Wheels) — grows into a
 full curriculum that
 **supplants the existing kernel-debugging courses and books** — with a live, breakable
@@ -125,7 +125,7 @@ rebuild, and their checks self-detect a stale kernel and say `make kernel`.*
 ### E · Crashes, Oops & Panic
 | Lesson | State | Absorbs / notes |
 |---|---|---|
-| E0 Anatomy of an oops | READY 🔲 | dissect a real oops field-by-field: BUG vs WARN vs panic, `UD2`, taint flags, RIP, call trace, registers; decode RIP → file:line (`faddr2line`, `decode_stacktrace.sh`) |
+| E0 Anatomy of an oops | READY ✅ | dissect a real oops field-by-field: BUG vs WARN vs panic, `UD2`, taint flags, RIP, call trace, registers; decode RIP → file:line (`faddr2line`; the specimen module builds with `-g`) |
 | 05 The driver that oopses | CHALLENGE ✅ | apply E0 — trigger, read, find, fix a NULL-deref bug |
 | E1 Post-mortem with `crash` | READY 🔲 | kexec/kdump → `/proc/vmcore` → `crash` `bt`/`ps`/`struct`; ORC unwinder |
 | **Wheel — The driver that oopses** | LIVE FIRE 🔲 | intermediate; the KASAN overlay kernel (built for C2) is available |
@@ -183,8 +183,8 @@ the catalog doesn't need re-teaching.
 
 ## 6. Suggested build order
 
-*Status so far: A, **all of B** (02/04 + B1–B4 + its Wheel), C (all of it), E (05),
-G (06/07) and H1 are built — 14 lessons and 3 Wheels across six modules. The opt-in
+*Status so far: A, **all of B** (02/04 + B1–B4 + its Wheel), C (all of it), E (E0 + 05),
+G (06/07) and H1 are built — 15 lessons and 3 Wheels across six modules. The opt-in
 KASAN overlay kernel, the Module B tracer config, and `make reset` are built too.
 Remaining priorities below.*
 
@@ -192,7 +192,8 @@ Remaining priorities below.*
 2. **B — B1–B4 + its Wheel** ✅ done (the flagship tracing track — the most direct
    supplant of the Udemy/LFD445 ftrace material; the base-config tracer bump shipped
    with it).
-3. **E — 05** ✅ done (the oops-fix); the driver Wheel (E) is still 🔲.
+3. **E — E0 + 05** ✅ done (the anatomy + the oops-fix); E1 (`crash`/kdump) and the
+   driver Wheel are still 🔲.
 4. **C / D**: **C done** (C1 / C2 / Wheel — KASAN ships as `make kasan-kernel`, a
    separate opt-in kernel rather than a base-config change). **D** (locking) is next,
    gated behind a lockdep / KCSAN overlay.

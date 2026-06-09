@@ -144,7 +144,10 @@ A git repo of directories, each level self-contained and verifiable.
 └── wheel/                  # incident scenarios (see §7)
 ```
 
-- Solutions live on a separate branch so they can't be peeked at by accident.
+- CHALLENGE lessons ship their skeleton on `main` (so the check is red) with the
+  fix as the last graduated hint; `make reset` restores the committed skeleton.
+  (Revised from the first sketch's separate solutions branch — see
+  POTENTIAL-CURRICULUM §7.)
 - `make check` runs the current level's `check.sh`.
 
 ---
@@ -285,3 +288,7 @@ A minimal but complete vertical slice that proves the whole approach:
 
 If that slice feels good to work through, the rest is mostly authoring more
 directories against the same harness.
+
+*Status: Phase 1 shipped, and that bet paid off — the curriculum has since grown
+to six modules. The live module map and build order are in
+[POTENTIAL-CURRICULUM.md](POTENTIAL-CURRICULUM.md).*
