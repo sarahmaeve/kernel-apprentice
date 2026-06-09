@@ -1,0 +1,30 @@
+diff --git a/B2-trace-just-what-matters/module/b2_worker.c b/B2-trace-just-what-matters/module/b2_worker.c
+index 2d78ed7..40b8166 100644
+--- a/B2-trace-just-what-matters/module/b2_worker.c
++++ b/B2-trace-just-what-matters/module/b2_worker.c
+@@ -15,22 +15,19 @@
+ 
+ static noinline void phase_parse(int n)
+ {
+-	/* TODO(B2): make this phase show a line containing "b2: parse" in the trace. */
+-	(void)n;
++	trace_printk("b2: parse %d bytes\n", n);
+ }
+ 
+ static noinline void phase_compute(int n)
+ {
+ 	int sum = n * 3;   /* "work" */
+ 
+-	/* TODO(B2): make this phase show a line containing "b2: compute" in the trace. */
+-	(void)sum;
++	trace_printk("b2: compute sum=%d\n", sum);
+ }
+ 
+ static noinline void phase_emit(int n)
+ {
+-	/* TODO(B2): make this phase show a line containing "b2: emit" in the trace. */
+-	(void)n;
++	trace_printk("b2: emit %d bytes\n", n);
+ }
+ 
+ static ssize_t b2_write(struct file *f, const char __user *u, size_t n, loff_t *ppos)

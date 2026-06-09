@@ -1,0 +1,43 @@
+diff --git a/C2-kasan-catches-you/module/kasan_df.c b/C2-kasan-catches-you/module/kasan_df.c
+index 2425339..5210f59 100644
+--- a/C2-kasan-catches-you/module/kasan_df.c
++++ b/C2-kasan-catches-you/module/kasan_df.c
+@@ -19,7 +19,6 @@ static int __init kasan_df_init(void)
+ 
+ 	pr_info("kasan_df: allocated, now releasing\n");
+ 	kfree(p);
+-	kfree(p);
+ 
+ 	pr_info("kasan_df: done\n");
+ 	return 0;
+diff --git a/C2-kasan-catches-you/module/kasan_oob.c b/C2-kasan-catches-you/module/kasan_oob.c
+index fc24dce..3ae0d26 100644
+--- a/C2-kasan-catches-you/module/kasan_oob.c
++++ b/C2-kasan-catches-you/module/kasan_oob.c
+@@ -22,7 +22,7 @@ static int __init kasan_oob_init(void)
+ 
+ 	pr_info("kasan_oob: writing a %d-byte buffer\n", LEN);
+ 
+-	for (i = 0; i <= LEN; i++)
++	for (i = 0; i < LEN; i++)
+ 		buf[i] = (char)i;
+ 
+ 	kfree(buf);
+diff --git a/C2-kasan-catches-you/module/kasan_uaf.c b/C2-kasan-catches-you/module/kasan_uaf.c
+index 63d1500..2556016 100644
+--- a/C2-kasan-catches-you/module/kasan_uaf.c
++++ b/C2-kasan-catches-you/module/kasan_uaf.c
+@@ -28,11 +28,11 @@ static int __init kasan_uaf_init(void)
+ 
+ 	pr_info("kasan_uaf: opened conn %d to %s\n", c->id, c->host);
+ 
+-	kfree(c);
+-
+ 	first = c->host[0];
+ 	pr_info("kasan_uaf: closed conn (host began '%c')\n", first);
+ 
++	kfree(c);
++
+ 	return 0;
+ }
+ 

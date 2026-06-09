@@ -1,0 +1,17 @@
+diff --git a/05-the-driver-that-oopses/module/oops_driver.c b/05-the-driver-that-oopses/module/oops_driver.c
+index 40bb308..39993ce 100644
+--- a/05-the-driver-that-oopses/module/oops_driver.c
++++ b/05-the-driver-that-oopses/module/oops_driver.c
+@@ -56,6 +56,12 @@ static int __init ka_init(void)
+ 	if (!state)
+ 		return -ENOMEM;
+ 
++	state->buf = kmalloc(BUFSZ, GFP_KERNEL);
++	if (!state->buf) {
++		kfree(state);
++		return -ENOMEM;
++	}
++
+ 	if (!proc_create(PROC_NAME, 0222, NULL, &ka_proc_ops)) {
+ 		kfree(state);
+ 		return -ENOMEM;

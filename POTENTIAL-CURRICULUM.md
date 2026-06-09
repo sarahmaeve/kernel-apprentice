@@ -210,6 +210,13 @@ Remaining priorities below.*
   lesson to its committed skeleton — git-restore for repo edits, re-extract for
   kernel-tree edits — and clears its pass-record, so prototyping and re-attempting are
   cheap (no `solutions` branch needed, as first sketched).
+- Every CHALLENGE lesson also ships a **`solution.patch`** — the same code as its
+  final graduated hint, machine-applyable. `make check-solved [LESSON=…]` applies it,
+  expects the check to PASS, and restores the skeleton: the regression test that the
+  lesson is still *solvable* after a kernel bump / config / harness change (`make
+  check` on main only exercises the red side). Keep patch and final hint showing the
+  same code. (Lesson 01 — a kernel-tree edit — isn't covered yet; C2's solved-check
+  is skipped unless its KASAN kernel is built.)
 - Heavy debug configs stay out of the base kernel (they slow every boot). The
   established pattern (see C2) is a **separate opt-in kernel build** —
   `harness/build-kasan-kernel.sh` / `make kasan-kernel`, booted via the `KERNEL_IMAGE`

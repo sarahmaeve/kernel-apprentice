@@ -41,7 +41,7 @@ RUN    := $(RUNTIME) run --rm    --platform=$(PLATFORM) $(KVM) $(MOUNTS) $(IMAGE
 
 LESSON ?=
 .DEFAULT_GOAL := help
-.PHONY: help up down doctor image shell kernel kasan-kernel initramfs check status validate reset clean distclean
+.PHONY: help up down doctor image shell kernel kasan-kernel initramfs check check-solved status validate reset clean distclean
 
 help: ## Show available targets
 	@awk 'BEGIN{FS=":.*##"} /^[a-zA-Z_-]+:.*##/ {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -76,6 +76,9 @@ initramfs: image ## Build the base BusyBox initramfs
 
 check: image ## Run lesson check(s): make check LESSON=01-syscall-is-the-door (omit = all)
 	$(RUN) harness/check.sh $(LESSON); rc=$$?; $(RUN) harness/gen-status.sh; exit $$rc
+
+check-solved: image ## Verify CHALLENGE lessons are still solvable: apply committed solutions, check, restore
+	$(RUN) harness/check-solved.sh $(LESSON)
 
 status: image ## Regenerate the dashboard's live status (assets/status.js, gitignored)
 	$(RUN) harness/gen-status.sh

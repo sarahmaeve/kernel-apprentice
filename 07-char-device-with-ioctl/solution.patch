@@ -1,0 +1,41 @@
+diff --git a/07-char-device-with-ioctl/module/ka_chardev.c b/07-char-device-with-ioctl/module/ka_chardev.c
+index 2686260..3b3c68f 100644
+--- a/07-char-device-with-ioctl/module/ka_chardev.c
++++ b/07-char-device-with-ioctl/module/ka_chardev.c
+@@ -31,22 +31,28 @@ static size_t ka_len        __maybe_unused;
+ 
+ static ssize_t ka_read(struct file *f, char __user *ubuf, size_t count, loff_t *ppos)
+ {
+-	/* TODO 1: return up to ka_len bytes of ka_buf to userspace, honoring *ppos so a
+-	 * second read returns 0 (EOF).  hint: simple_read_from_buffer(). */
+-	return 0;
++	return simple_read_from_buffer(ubuf, count, ppos, ka_buf, ka_len);
+ }
+ 
+ static ssize_t ka_write(struct file *f, const char __user *ubuf, size_t count, loff_t *ppos)
+ {
+-	/* TODO 2: copy up to BUFSZ bytes from userspace into ka_buf, set ka_len, and
+-	 * return the number of bytes stored.  hint: copy_from_user(). */
+-	return -EINVAL;
++	size_t n = min_t(size_t, count, BUFSZ);
++
++	if (copy_from_user(ka_buf, ubuf, n))
++		return -EFAULT;
++	ka_len = n;
++	return n;
+ }
+ 
+ static long ka_ioctl(struct file *f, unsigned int cmd, unsigned long arg)
+ {
+-	/* TODO 3: if cmd == KA_GET_LEN, write ka_len (as an int) to the user pointer in
+-	 * arg and return 0; otherwise return -ENOTTY.  hint: copy_to_user(). */
++	if (cmd == KA_GET_LEN) {
++		int len = ka_len;
++
++		if (copy_to_user((int __user *)arg, &len, sizeof(len)))
++			return -EFAULT;
++		return 0;
++	}
+ 	return -ENOTTY;
+ }
+ 

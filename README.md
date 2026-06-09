@@ -47,6 +47,9 @@ make check LESSON=01-syscall-is-the-door
 ```
 
 `make help` lists every target. `make check` with no `LESSON` runs them all.
+`make check-solved` replays each CHALLENGE lesson's committed solution and
+verifies it still passes — run it after a kernel bump or harness change, before
+trusting either.
 
 > **Editing kernel source.** It lives in a Docker volume (see
 > [harness/README.md](harness/README.md) for why), so edit it from inside

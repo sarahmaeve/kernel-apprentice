@@ -1,0 +1,22 @@
+diff --git a/06-instrument-it-yourself/module/counter.c b/06-instrument-it-yourself/module/counter.c
+index fdeec5d..3b54860 100644
+--- a/06-instrument-it-yourself/module/counter.c
++++ b/06-instrument-it-yourself/module/counter.c
+@@ -31,7 +31,7 @@ static atomic_t ka_count __maybe_unused = ATOMIC_INIT(0);
+ /* Runs just before every call to PROBE_SYM in the live kernel. */
+ static int ka_pre_handler(struct kprobe *p, struct pt_regs *regs)
+ {
+-	/* TODO 1: bump ka_count by one.  (hint: atomic_inc) */
++	atomic_inc(&ka_count);
+ 	return 0;
+ }
+ 
+@@ -43,7 +43,7 @@ static struct kprobe ka_kp = {
+ /* Produces the contents of /proc/kernel-apprentice-count on each read. */
+ static int ka_show(struct seq_file *m, void *v)
+ {
+-	/* TODO 2: print exactly  "getpid calls: N\n"  where N = atomic_read(&ka_count). */
++	seq_printf(m, "getpid calls: %d\n", atomic_read(&ka_count));
+ 	return 0;
+ }
+ 

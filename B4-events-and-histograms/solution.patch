@@ -1,0 +1,10 @@
+diff --git a/B4-events-and-histograms/trigger.hist b/B4-events-and-histograms/trigger.hist
+index 058e8ab..4b04cd8 100644
+--- a/B4-events-and-histograms/trigger.hist
++++ b/B4-events-and-histograms/trigger.hist
+@@ -3,4 +3,4 @@
+ # Goal: a histogram of how many times each syscall NUMBER fired during the run.
+ # TODO(B4): set the key field below so the buckets are per syscall id.
+ #           (Which field? `cat .../sys_enter/format` lists them; or open the hints.)
+-hist:keys=___:sort=hitcount
++hist:keys=id:sort=hitcount
