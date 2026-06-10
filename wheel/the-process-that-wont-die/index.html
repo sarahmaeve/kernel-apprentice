@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WHL // the process that won't die</title>
+<meta name="description" content="Wheel of Misfortune: a service is frozen and kill -9 does nothing. Find where it's stuck and why it can't be killed.">
+<!-- IBM Plex Mono self-hosted via @font-face in crt.css -->
+<link rel="stylesheet" href="../../assets/crt.css">
+</head>
+<body>
+<div class="app">
+
+  <header class="statusline">
+    <span class="live"><span class="prefix">&gt;</span> wheel of misfortune // the process that won't die<span class="cursor" aria-hidden="true"></span></span>
+    <span class="meta">[ live fire &middot; symptom-first ]</span>
+  </header>
+
+  <nav class="rail" aria-label="Sections">
+    <span class="label">./scenario</span>
+    <nav>
+      <a class="navlink" href="#page" aria-current="true">the page</a>
+      <a class="navlink" href="#run">run</a>
+      <a class="navlink" href="#job">your job</a>
+      <a class="navlink" href="#read">why kill -9 fails</a>
+      <a class="navlink" href="#hints">hints</a>
+      <a class="navlink" href="#postmortem">post-mortem</a>
+      <a class="navlink" href="#further">further reading</a>
+    </nav>
+    <span class="label" style="margin-top:var(--space-lg)">./source</span>
+    <nav>
+      <a class="navlink" href="../../index.html">&larr; command index</a>
+      <a class="navlink" href="README.md">README.md</a>
+      <a class="navlink" href="ticketd.c">ticketd.c</a>
+      <a class="navlink" href="check.sh">check.sh</a>
+    </nav>
+  </nav>
+
+  <main class="workspace">
+
+    <section class="panel panel--fail" id="page">
+      <h1><span class="prefix">$</span> WHL ./the-process-that-wont-die</h1>
+      <p class="tagline" style="color:var(--error)">live fire &middot; kill -9 does nothing</p>
+      <p class="muted">You're paged with what production shows you and nothing more. Drive real
+        tools; <strong>score on the evidence you point at, not on a guess.</strong></p>
+      <blockquote class="page" id="alert">
+        <p><strong>&#128223; PAGE.</strong> The ticket service, <code>ticketd</code>, has
+          <strong>stopped handling requests</strong> — its log ends mid-request. The supervisor tried
+          a restart; the old process <strong>won't exit</strong>: <code>kill -9</code> does
+          <em>nothing</em>. Load average is climbing although the CPUs are idle.</p>
+        <p>The binary is unchanged; it ran fine until the last deploy added the vendor's journaling
+          driver. Find out <em>where it's stuck, and why kill -9 can't touch it</em>.</p>
+      </blockquote>
+      <p class="muted" style="margin:0">Don't open the post-mortem until you've driven it.</p>
+    </section>
+
+    <section class="panel" id="run">
+      <div class="panel__head"><span class="panel__id">[01]</span><h2><span class="prefix">$</span> RUN THE SCENARIO</h2></div>
+      <div class="term"><div class="line cmd">make check LESSON=wheel/the-process-that-wont-die</div></div>
+      <p class="muted" style="margin-top:var(--space-md)">This boots the broken guest: the service
+        journals through a vendor kernel module and freezes on its first record. The app's source is
+        fine — the fault is below the syscall line.</p>
+    </section>
+
+    <section class="panel" id="job">
+      <div class="panel__head"><span class="panel__id">[02]</span><h2><span class="prefix">./</span>YOUR JOB</h2></div>
+      <ol class="steps">
+        <li><strong>Read the symptom.</strong> <code>journaling ticket 1</code> … and nothing. No
+          error, no exit. <code>kill -9</code> returns success and changes nothing.</li>
+        <li><strong>Ask the task's state.</strong> <code>grep State /proc/&lt;pid&gt;/status</code> —
+          <code>D (disk sleep)</code>, uninterruptible; <code>SigPnd</code> shows the undelivered
+          KILL.</li>
+        <li><strong>Ask where.</strong> <code>cat /proc/&lt;pid&gt;/stack</code> (H2's move): top frame
+          <code>vjournal_write</code> — inside the vendor driver. (The stack file filters the lock
+          plumbing; khungtaskd's dmesg trace shows the <code>__mutex_lock</code> frames.)</li>
+        <li><strong>Ask who else.</strong> <code>dmesg</code> — khungtaskd (D3) reported <em>two</em>
+          blocked tasks, then named the relationship outright:
+          <code>INFO: task ticketd:68 is blocked on a mutex likely owned by task
+          vjournal-compac:67.</code> (Note the 15-char comm truncation.)</li>
+        <li><strong>Point at the evidence.</strong> <em>"ticketd is in uninterruptible sleep inside
+          vjournal_write, waiting on the journal mutex; the holder, vjournal-compact, is itself
+          wedged in D — the lock never releases, so SIGKILL is never delivered."</em></li>
+      </ol>
+    </section>
+
+    <section class="panel" id="read">
+      <div class="panel__head"><span class="panel__id">[03]</span><h2><span class="prefix">./</span>WHY KILL -9 CANNOT WORK</h2></div>
+      <p><code>SIGKILL</code> doesn't destroy a process — it's delivered the next time the task runs.
+        A task in <code>TASK_UNINTERRUPTIBLE</code> is not runnable and doesn't process signals;
+        that's the contract (normally held for microseconds around I/O). A task that <em>stays</em>
+        in D is beyond userspace entirely: the only ways out are the awaited resource appearing, or
+        a reboot.</p>
+      <p class="muted">It's also why <strong>load climbs while CPUs idle</strong>: Linux counts
+        D-state tasks into the load average — the classic signature of this whole incident class.</p>
+    </section>
+
+    <section class="panel" id="hints">
+      <div class="panel__head"><span class="panel__id">[04]</span><h2><span class="prefix">./</span>GRADUATED HINTS</h2></div>
+      <details class="hint"><summary>the state</summary>
+        <div class="hint__body"><p style="margin:0"><code>grep -E '^(State|SigPnd)'
+          /proc/&lt;pid&gt;/status</code> — <code>State: D (disk sleep)</code>, and
+          <code>SigPnd: 0000000000000100</code>: that bit is signal 9, the SIGKILL that landed and
+          will never be delivered.</p></div>
+      </details>
+      <details class="hint"><summary>the place</summary>
+        <div class="hint__body">
+<pre class="code" data-lang="text"><code>[&lt;0&gt;] vjournal_write+0x19/0x40 [vjournal]
+[&lt;0&gt;] proc_reg_write+0x59/0xa0
+[&lt;0&gt;] vfs_write+0xcf/0x470
+[&lt;0&gt;] ksys_write+0x6b/0xe0
+[&lt;0&gt;] do_syscall_64+0xb4/0x350</code></pre>
+          <p style="margin:0">Bottom-up: the <code>write(2)</code> path ending in the vendor module.
+          The stack file filters lock internals; khungtaskd's dmesg trace has the
+          <code>__mutex_lock</code> frames.</p></div>
+      </details>
+      <details class="hint"><summary>the kernel already told you</summary>
+        <div class="hint__body"><p style="margin:0"><code>dmesg | grep "blocked for more than"</code>
+          — khungtaskd reported both tasks, then named the relationship:
+          <code>blocked on a mutex likely owned by task vjournal-compac:67</code>. Two D-state
+          tasks, one lock: the holder is the root cause; the service is collateral.</p></div>
+      </details>
+    </section>
+
+    <section class="panel panel--warn" id="postmortem">
+      <div class="panel__head"><span class="panel__id">[05]</span><h2><span class="prefix">./</span>POST-MORTEM</h2></div>
+      <details class="hint"><summary>open after you've driven it &mdash; ground truth + the lesson</summary>
+        <div class="hint__body">
+          <p><strong>Ground truth.</strong> The vendor driver's compaction thread takes the journal
+            mutex, then waits forever for "device I/O" that never completes (<code>vjournal.c</code>
+            — a stand-in for a dead device or firmware hang). The service's next write queues on
+            that mutex in uninterruptible sleep and becomes unkillable. Nothing is wrong with
+            <code>ticketd</code> — the <strong>vendor module wedged while holding a lock the service
+            needs</strong>.</p>
+          <p><strong>Why it's the archetype.</strong> "Unkillable process + climbing load + idle
+            CPUs" is a staple page, and the cause is almost always a D-state wait on a dead
+            resource: NFS server gone, dying disk under <code>fsync</code>, wedged vendor driver.
+            The moves are mechanical: state, stack, khungtaskd — who's stuck, where, and who
+            <em>holds</em> what they wait for.</p>
+          <p style="margin:0"><strong>What observability would have caught it faster.</strong>
+            khungtaskd had named both tasks before anyone looked; alerting on
+            <code>INFO: task … blocked for more than</code> (or <code>hung_task_panic=1</code> +
+            kdump in stricter fleets — lesson E1, planned) makes this page self-diagnosing.</p>
+        </div>
+      </details>
+      <p class="foot" style="margin-top:var(--space-md)"><code>check.sh</code> verifies the scenario
+        arms: the service freezes, sits in D, survives SIGKILL, its stack names the module, and
+        khungtaskd reports it. A later facilitator layer grades <em>your</em> evidence.</p>
+    </section>
+
+    <section class="panel" id="further">
+      <div class="panel__head"><span class="panel__id">[06]</span><h2><span class="prefix">./</span>FURTHER READING</h2></div>
+      <p class="muted">Canonical references to explore deeper — each opens in a new tab.</p>
+      <ul>
+        <li><a class="ext" href="https://docs.kernel.org/admin-guide/lockup-watchdogs.html" target="_blank" rel="noopener noreferrer">docs.kernel.org — Softlockup and hardlockup detectors</a> — the detector family around khungtaskd.</li>
+        <li><a class="ext" href="https://docs.kernel.org/locking/mutex-design.html" target="_blank" rel="noopener noreferrer">docs.kernel.org — Generic Mutex Subsystem</a> — why mutex waiters sleep uninterruptibly.</li>
+      </ul>
+    </section>
+
+  </main>
+
+  <aside class="diagnostics" aria-label="Scenario diagnostics">
+    <section class="panel panel--fail">
+      <div class="panel__head"><span class="panel__id">[!]</span><h2 style="font-size:1.05rem"><span class="prefix">&gt;</span> system fault</h2></div>
+      <div class="kv"><span class="k">scenario</span><span class="v">the-process-that-wont-die</span></div>
+      <div class="kv"><span class="k">tier</span><span class="v">basic</span></div>
+      <div class="kv"><span class="k">state</span><span class="v"><span class="badge badge--fail">LIVE FIRE</span></span></div>
+      <div class="kv"><span class="k">fault</span><span class="v">vendor kthread wedges holding a mutex</span></div>
+      <div class="kv"><span class="k">surface</span><span class="v">D state &middot; /proc stack &middot; khungtaskd</span></div>
+    </section>
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">&gt;</span> armed markers</h2></div>
+      <div class="kv"><span class="k">symptom</span><span class="v">SURVIVED kill -9 &middot; State: D</span></div>
+      <div class="kv"><span class="k">evidence</span><span class="v">vjournal_write &middot; blocked for more than</span></div>
+    </section>
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">$</span> next</h2></div>
+      <div class="stack">
+        <a class="btn btn--dim" href="../fast-except-sometimes/index.html">&larr; FAST EXCEPT SOMETIMES</a>
+        <a class="btn btn--dim" href="../../index.html">COMMAND INDEX</a>
+      </div>
+    </section>
+  </aside>
+
+</div>
+</body>
+</html>

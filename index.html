@@ -207,6 +207,24 @@
               <td><span class="badge badge--opt">OPTIONAL</span> <span class="badge badge--warn">CHALLENGE</span></td>
             </tr>
             <tr>
+              <td><a href="D1-lockdep-on-a-deadlock/index.html">D1</a></td>
+              <td>lockdep on a deadlock <span class="muted">(debug kernel)</span></td>
+              <td>two routines, opposite lock orders — read lockdep's proof of the deadlock-to-be, fix the order</td>
+              <td><span class="badge badge--warn">CHALLENGE</span></td>
+            </tr>
+            <tr>
+              <td><a href="D2-kcsan-finds-a-race/index.html">D2</a></td>
+              <td>KCSAN finds a race <span class="muted">(debug kernel)</span></td>
+              <td>two workers, one counter, a short total — read the data-race report, make it impossible</td>
+              <td><span class="badge badge--warn">CHALLENGE</span></td>
+            </tr>
+            <tr>
+              <td><a href="D3-lockups-and-hung-tasks/index.html">D3</a></td>
+              <td>lockups &amp; hung tasks</td>
+              <td>stall a CPU and park a task in D; the watchdog and khungtaskd report both, unprompted</td>
+              <td><span class="badge badge--info">READY</span></td>
+            </tr>
+            <tr>
               <td><a href="wheel/works-on-my-laptop/index.html">WHL</a></td>
               <td>works on my laptop <span class="muted">(wheel of misfortune)</span></td>
               <td>diagnose a live, broken box — point at the <code>EMFILE</code> evidence, not a guess</td>
@@ -222,6 +240,12 @@
               <td><a href="wheel/fast-except-sometimes/index.html">FST</a></td>
               <td>fast except sometimes <span class="muted">(wheel of misfortune)</span></td>
               <td>great p50, awful p99 — use <code>function_graph</code> to localize the tail-latency stall</td>
+              <td><span class="badge badge--fail">LIVE FIRE</span></td>
+            </tr>
+            <tr>
+              <td><a href="wheel/the-process-that-wont-die/index.html">DIE</a></td>
+              <td>the process that won't die <span class="muted">(wheel of misfortune)</span></td>
+              <td>a frozen service that <code>kill -9</code> can't touch — state D, the stack, and khungtaskd</td>
               <td><span class="badge badge--fail">LIVE FIRE</span></td>
             </tr>
           </tbody>

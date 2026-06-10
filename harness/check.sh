@@ -28,9 +28,13 @@ LESSONS=(
   05-the-driver-that-oopses
   07-char-device-with-ioctl
   C1-read-an-oom-report
+  D1-lockdep-on-a-deadlock
+  D2-kcsan-finds-a-race
+  D3-lockups-and-hung-tasks
   wheel/works-on-my-laptop
   wheel/mystery-oom-kill
   wheel/fast-except-sometimes
+  wheel/the-process-that-wont-die
 )
 
 ensure_kernel

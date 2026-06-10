@@ -1,0 +1,35 @@
+diff --git a/D2-kcsan-finds-a-race/module/d2_race.c b/D2-kcsan-finds-a-race/module/d2_race.c
+index c5a6199..0bcce28 100644
+--- a/D2-kcsan-finds-a-race/module/d2_race.c
++++ b/D2-kcsan-finds-a-race/module/d2_race.c
+@@ -17,10 +17,11 @@
+ #include <linux/init.h>
+ #include <linux/kthread.h>
+ #include <linux/completion.h>
++#include <linux/atomic.h>
+ 
+ #define D2_ITERS 200000
+ 
+-static long d2_total;
++static atomic_long_t d2_total = ATOMIC_LONG_INIT(0);
+ 
+ static DECLARE_COMPLETION(d2_start);
+ static DECLARE_COMPLETION(d2_done_a);
+@@ -29,7 +30,7 @@ static DECLARE_COMPLETION(d2_done_b);
+ /* Count one processed event. */
+ static noinline void d2_count_event(void)
+ {
+-	d2_total++;
++	atomic_long_inc(&d2_total);
+ }
+ 
+ static int d2_worker(void *done)
+@@ -51,7 +52,7 @@ static int __init d2_init(void)
+ 	wait_for_completion(&d2_done_a);
+ 	wait_for_completion(&d2_done_b);
+ 	pr_info("kernel-apprentice: d2_race counted %ld of %d events\n",
+-		d2_total, 2 * D2_ITERS);
++		atomic_long_read(&d2_total), 2 * D2_ITERS);
+ 	return 0;
+ }
+ 

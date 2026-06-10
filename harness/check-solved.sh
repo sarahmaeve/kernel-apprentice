@@ -46,6 +46,8 @@ SOLVABLE=(
   06-instrument-it-yourself
   05-the-driver-that-oopses
   07-char-device-with-ioctl
+  D1-lockdep-on-a-deadlock
+  D2-kcsan-finds-a-race
   C2-kasan-catches-you
 )
 
@@ -122,6 +124,13 @@ run_one() {
     warn "skipping $d — its KASAN kernel isn't built (opt-in: make kasan-kernel)"
     return 0
   fi
+
+  case "$d" in D1-*|D2-*)
+    if [ ! -f "$DEBUG_BZIMAGE" ]; then
+      warn "skipping $d — the debug kernel isn't built (make debug-kernel)"
+      return 0
+    fi ;;
+  esac
 
   if [ -f "$REPO_ROOT/$d/.reset-kernel" ]; then
     if [ "$NO_KERNEL_EDITS" = 1 ]; then

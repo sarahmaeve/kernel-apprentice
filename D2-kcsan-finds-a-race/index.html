@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>D2 // KCSAN finds a race</title>
+<meta name="description" content="CHALLENGE: two workers share a counter and the total comes up short. KCSAN catches the data race; you make it impossible.">
+<!-- IBM Plex Mono self-hosted via @font-face in crt.css -->
+<link rel="stylesheet" href="../assets/crt.css">
+</head>
+<body>
+<div class="app">
+
+  <header class="statusline">
+    <span class="live"><span class="prefix">&gt;</span> lesson D2 // KCSAN finds a race<span class="cursor" aria-hidden="true"></span></span>
+    <span class="meta">[ challenge &middot; read the race, fix it ]</span>
+  </header>
+
+  <nav class="rail" aria-label="Sections">
+    <span class="label">./lesson D2</span>
+    <nav>
+      <a class="navlink" href="#symptom" aria-current="true">the symptom</a>
+      <a class="navlink" href="#read">read the report</a>
+      <a class="navlink" href="#fix">find + fix</a>
+      <a class="navlink" href="#hints">hints</a>
+      <a class="navlink" href="#further">further reading</a>
+    </nav>
+    <span class="label" style="margin-top:var(--space-lg)">./source</span>
+    <nav>
+      <a class="navlink" href="../index.html">&larr; command index</a>
+      <a class="navlink" href="README.md">README.md</a>
+      <a class="navlink" href="module/d2_race.c">module/d2_race.c</a>
+      <a class="navlink" href="check.sh">check.sh</a>
+    </nav>
+  </nav>
+
+  <main class="workspace">
+
+    <section class="panel panel--fail" id="symptom">
+      <h1><span class="prefix">$</span> D2 ./kcsan-finds-a-race</h1>
+      <p class="tagline" style="color:var(--error)">no crash &middot; no error &middot; just wrong numbers</p>
+      <p>Two workers process 200,000 events each and count them in a shared total. Every event is
+        counted exactly once — and the total still comes up <strong>short, differently every
+        run</strong>. That's a <strong>data race</strong>: the bug class that never crashes, just
+        quietly corrupts. <strong>KCSAN</strong> catches it in the act and shows both sides.</p>
+      <div class="term"><div class="line cmd">make check LESSON=D2-kcsan-finds-a-race</div></div>
+      <div class="callout" style="margin-top:var(--space-md)">
+        <strong>Working in the workbench.</strong> Needs the debug kernel (<code>make debug-kernel</code>,
+        one-time, shared with D1). Edit <code>module/d2_race.c</code>, then <code>make check</code>
+        from the host.
+      </div>
+    </section>
+
+    <section class="panel" id="read">
+      <div class="panel__head"><span class="panel__id">[01]</span><h2><span class="prefix">./</span>READ THE REPORT</h2></div>
+<pre class="code" data-lang="text"><code>BUG: KCSAN: data-race in d2_count_event [d2_race] / d2_count_event [d2_race]
+
+write to 0xffffffffc03246c0 of 8 bytes by task 70 on cpu 1:
+ d2_count_event+0x29/0x40 [d2_race]
+ d2_worker+0x29/0x40 [d2_race]
+ ...
+read to 0xffffffffc03246c0 of 8 bytes by task 69 on cpu 0:
+ d2_count_event+0x12/0x40 [d2_race]
+ d2_worker+0x29/0x40 [d2_race]
+ ...
+kernel-apprentice: d2_race counted 347162 of 400000 events</code></pre>
+      <ul>
+        <li><strong>Two stacks, two CPUs, one address</strong> — the definition of a data race: concurrent access, at least one write, no ordering. KCSAN plants a <em>watchpoint</em> on a sampled access and stalls; whoever touches the address during the stall is caught with it.</li>
+        <li><strong>It's the same line, caught mid-split</strong> — the <em>read</em> at <code>+0x12</code> and the <em>write</em> at <code>+0x29</code> are <code>d2_total++</code> torn into its load and store, photographed mid-interleave. This run lost 52,838 events; the next loses a different number.</li>
+        <li><strong>Why the count is short</strong> — <code>d2_total++</code> is a read-modify-write: both CPUs load <code>N</code>, both store <code>N+1</code> — two events, one tick. Across 400,000 increments the total drifts low by a different amount every run.</li>
+        <li><strong>Why it's miserable in production</strong> — production kernels don't run KCSAN; you just get metrics that don't add up, worse under load. The fix is trivial once you believe the diagnosis.</li>
+      </ul>
+    </section>
+
+    <section class="panel" id="fix">
+      <div class="panel__head"><span class="panel__id">[02]</span><h2><span class="prefix">./</span>FIND + FIX</h2></div>
+      <p>Make the increment a single indivisible operation — the kernel's tool for a cross-CPU
+        counter is <code>atomic_long_t</code> and friends. Note the check is <em>not</em> satisfiable
+        by silencing KCSAN (e.g. <code>data_race()</code>): it independently requires the count to be
+        <strong>exact</strong>.</p>
+      <p class="muted"><strong>PASS</strong> when the log shows
+        <code>counted 400000 of 400000 events</code> and no <code>BUG: KCSAN: data-race</code>.</p>
+    </section>
+
+    <section class="panel" id="hints">
+      <div class="panel__head"><span class="panel__id">[03]</span><h2><span class="prefix">./</span>GRADUATED HINTS</h2></div>
+      <details class="hint"><summary>where is the race?</summary>
+        <div class="hint__body"><p style="margin:0">The report names <code>d2_count_event</code>
+          twice — both racing parties are the same line, <code>d2_total++</code>, run concurrently by
+          the two workers.</p></div>
+      </details>
+      <details class="hint"><summary>the right primitive?</summary>
+        <div class="hint__body"><p style="margin:0">A plain <code>long</code> can't be incremented
+          safely from two CPUs. <code>atomic_long_t</code> / <code>atomic_long_inc</code> /
+          <code>atomic_long_read</code> make the read-modify-write indivisible — and KCSAN treats
+          marked atomics as intentional.</p></div>
+      </details>
+      <details class="hint"><summary>the fix</summary>
+        <div class="hint__body">
+<pre class="code" data-lang="c"><code>static atomic_long_t d2_total = ATOMIC_LONG_INIT(0);
+
+static noinline void d2_count_event(void)
+{
+	atomic_long_inc(&amp;d2_total);
+}</code></pre>
+          <p style="margin:0">…and print it with <code>atomic_long_read(&amp;d2_total)</code> in
+          <code>d2_init</code>.</p></div>
+      </details>
+    </section>
+
+    <section class="panel" id="further">
+      <div class="panel__head"><span class="panel__id">[04]</span><h2><span class="prefix">./</span>FURTHER READING</h2></div>
+      <p class="muted">Canonical references to explore deeper — each opens in a new tab.</p>
+      <ul>
+        <li><a class="ext" href="https://docs.kernel.org/dev-tools/kcsan.html" target="_blank" rel="noopener noreferrer">docs.kernel.org — The Kernel Concurrency Sanitizer</a> — watchpoints, what counts as a race, and the <code>data_race()</code>/<code>READ_ONCE()</code> vocabulary.</li>
+        <li><a class="ext" href="https://docs.kernel.org/core-api/wrappers/atomic_t.html" target="_blank" rel="noopener noreferrer">docs.kernel.org — Semantics and Behavior of Atomic Types</a> — the atomic counter API behind the fix.</li>
+      </ul>
+    </section>
+
+  </main>
+
+  <aside class="diagnostics" aria-label="Lesson diagnostics">
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">./</span>diagnostics</h2></div>
+      <div class="kv"><span class="k">lesson</span><span class="v">D2</span></div>
+      <div class="kv"><span class="k">module</span><span class="v">concurrency &amp; hangs</span></div>
+      <div class="kv"><span class="k">state</span><span class="v"><span class="badge badge--warn">CHALLENGE</span></span></div>
+      <div class="kv"><span class="k">you fix</span><span class="v">a lost-update data race</span></div>
+      <div class="kv"><span class="k">kernel</span><span class="v">debug overlay (KCSAN)</span></div>
+    </section>
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">&gt;</span> pass markers</h2></div>
+      <div class="kv"><span class="k">no splat</span><span class="v">no BUG: KCSAN line</span></div>
+      <div class="kv"><span class="k">exact</span><span class="v">counted 400000 of 400000</span></div>
+    </section>
+    <section class="panel">
+      <div class="panel__head"><span class="panel__id">[*]</span><h2 style="font-size:1.05rem"><span class="prefix">$</span> next</h2></div>
+      <div class="stack">
+        <a class="btn" href="../D3-lockups-and-hung-tasks/index.html">LESSON D3 &rarr;</a>
+        <a class="btn btn--dim" href="../D1-lockdep-on-a-deadlock/index.html">&larr; LESSON D1</a>
+      </div>
+    </section>
+  </aside>
+
+</div>
+</body>
+</html>

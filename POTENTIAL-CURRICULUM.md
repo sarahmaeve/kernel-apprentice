@@ -1,8 +1,8 @@
 # POTENTIAL-CURRICULUM.md — the full apprenticeship
 
 *A living planning doc, like [DESIGN.md](DESIGN.md) — meant to be argued with, not
-treated as fixed. It sketches how the apprentice arc — now **16 lessons and three Wheel
-scenarios built** across modules A, B, C, E, G and H (01–07, E0, H1–H2, B1–B4, C1–C2, plus the
+treated as fixed. It sketches how the apprentice arc — now **19 lessons and four Wheel
+scenarios built** across modules A, B, C, D, E, G and H (01–07, E0, H1–H2, B1–B4, C1–C2, D1–D3, plus the
 Works-on-my-laptop, Mystery-OOM-kill and Fast-except-sometimes Wheels) — grows into a
 full curriculum that
 **supplants the existing kernel-debugging courses and books** — with a live, breakable
@@ -115,12 +115,16 @@ rebuild, and their checks self-detect a stale kernel and say `make kernel`.*
 | **Wheel — Mystery OOM kill** | LIVE FIRE ✅ | undersized cgroup + workload; grades on `constraint=CONSTRAINT_MEMCG` |
 
 ### D · Concurrency, Locking & Hangs
+*D1/D2 run on the **debug overlay kernel** (lockdep + KCSAN, `make debug-kernel` —
+the C2 pattern); D3 + the Wheel run on the base kernel, whose config gained the
+production-standard stall detectors (`SOFTLOCKUP_DETECTOR`, `DETECT_HUNG_TASK`).*
+
 | Lesson | State | Absorbs / notes |
 |---|---|---|
-| D1 lockdep on a deadlock | CHALLENGE 🔲 | ABBA ordering bug; lockdep names it; fix the order |
-| D2 KCSAN finds a race | CHALLENGE 🔲 | data race; add the missing sync |
-| D3 Lockups & hung tasks | READY 🔲 | soft/hard lockup (watchdog + NMI), `khungtaskd`; the mechanism behind the D-state Wheel |
-| **Wheel — The process that won't die** | LIVE FIRE 🔲 | uninterruptible `D` sleep; `khungtaskd` fires; `/proc/<pid>/stack` |
+| D1 lockdep on a deadlock | CHALLENGE ✅ | ABBA ordering bug, proved by lockdep from one clean run of each path — no hang needed; fix the order |
+| D2 KCSAN finds a race | CHALLENGE ✅ | lost-update data race on a shared counter; fix with atomics (check requires the exact total, so silencing KCSAN can't pass) |
+| D3 Lockups & hung tasks | READY ✅ | soft lockup (watchdog) + `khungtaskd`, with the real tuning knobs; hard lockup (NMI) taught in prose — TCG has no NMI watchdog |
+| **Wheel — The process that won't die** | LIVE FIRE ✅ | service wedged in `D` inside a vendor module's lock; `kill -9` lands but never delivers; `/proc/<pid>/stack` + `khungtaskd` |
 
 ### E · Crashes, Oops & Panic
 | Lesson | State | Absorbs / notes |
@@ -183,8 +187,9 @@ the catalog doesn't need re-teaching.
 
 ## 6. Suggested build order
 
-*Status so far: A, **all of B** (02/04 + B1–B4 + its Wheel), C (all of it), E (E0 + 05),
-G (06/07) and H1–H2 are built — 16 lessons and 3 Wheels across six modules. The opt-in
+*Status so far: A, **all of B** (02/04 + B1–B4 + its Wheel), C (all of it), **all of D**
+(D1–D3 + its Wheel), E (E0 + 05), G (06/07) and H1–H2 are built — 19 lessons and 4
+Wheels across seven modules. The opt-in
 KASAN overlay kernel, the Module B tracer config, and `make reset` are built too.
 Remaining priorities below.*
 
@@ -194,9 +199,10 @@ Remaining priorities below.*
    with it).
 3. **E — E0 + 05** ✅ done (the anatomy + the oops-fix); E1 (`crash`/kdump) and the
    driver Wheel are still 🔲.
-4. **C / D**: **C done** (C1 / C2 / Wheel — KASAN ships as `make kasan-kernel`, a
-   separate opt-in kernel rather than a base-config change). **D** (locking) is next,
-   gated behind a lockdep / KCSAN overlay.
+4. **C / D**: **both done.** C ships KASAN as `make kasan-kernel` (separate opt-in
+   kernel). D ships D1–D3 + the "process that won't die" Wheel; D1/D2 run on the
+   lockdep+KCSAN overlay (`make debug-kernel`, same pattern), D3 + Wheel on the base
+   kernel via the cheap stall-detector config bump.
 5. **F**: networking last — it needs the most extra guest plumbing.
 
 ## 7. Conventions (how a new lesson is added)

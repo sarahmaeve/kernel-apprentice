@@ -1,0 +1,19 @@
+diff --git a/D1-lockdep-on-a-deadlock/module/d1_locks.c b/D1-lockdep-on-a-deadlock/module/d1_locks.c
+index 779caf5..4ec48b4 100644
+--- a/D1-lockdep-on-a-deadlock/module/d1_locks.c
++++ b/D1-lockdep-on-a-deadlock/module/d1_locks.c
+@@ -35,12 +35,12 @@ static noinline void d1_refresh_stats(void)
+ /* Drop the cache, recording the drop in the stats table. */
+ static noinline void d1_drop_caches(void)
+ {
+-	mutex_lock(&d1_cache_lock);
+ 	mutex_lock(&d1_stats_lock);
++	mutex_lock(&d1_cache_lock);
+ 	d1_cache_count = 0;
+ 	d1_stat_count++;
+-	mutex_unlock(&d1_stats_lock);
+ 	mutex_unlock(&d1_cache_lock);
++	mutex_unlock(&d1_stats_lock);
+ }
+ 
+ static int __init d1_init(void)

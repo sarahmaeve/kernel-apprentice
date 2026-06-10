@@ -31,6 +31,12 @@ INITRAMFS_BASE="$BUILD_DIR/initramfs-base.cpio.gz"   # BusyBox-only base image
 KASAN_SRC="$BUILD_DIR/linux-${KERNEL_VERSION}-kasan"
 KASAN_BZIMAGE="$KASAN_SRC/arch/x86/boot/bzImage"
 
+# DEBUG overlay kernel — a SECOND, SEPARATE source tree built in-tree with lockdep
+# (PROVE_LOCKING) + KCSAN, used by Module D's lessons D1/D2. Same pattern as the
+# KASAN overlay above; built by `make debug-kernel` (harness/build-debug-kernel.sh).
+DEBUG_SRC="$BUILD_DIR/linux-${KERNEL_VERSION}-debug"
+DEBUG_BZIMAGE="$DEBUG_SRC/arch/x86/boot/bzImage"
+
 # --- Logging --------------------------------------------------------------
 if [ -t 2 ]; then
   C_BLU=$'\033[34m'; C_GRN=$'\033[32m'; C_RED=$'\033[31m'

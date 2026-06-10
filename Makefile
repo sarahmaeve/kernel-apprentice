@@ -41,7 +41,7 @@ RUN    := $(RUNTIME) run --rm    --platform=$(PLATFORM) $(KVM) $(MOUNTS) $(IMAGE
 
 LESSON ?=
 .DEFAULT_GOAL := help
-.PHONY: help up down doctor image shell kernel kasan-kernel initramfs check check-solved status validate reset clean distclean
+.PHONY: help up down doctor image shell kernel kasan-kernel debug-kernel initramfs check check-solved status validate reset clean distclean
 
 help: ## Show available targets
 	@awk 'BEGIN{FS=":.*##"} /^[a-zA-Z_-]+:.*##/ {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -70,6 +70,9 @@ kernel: image ## Build the pinned kernel — slow ONE-TIME; cached in harness/.b
 
 kasan-kernel: image ## OPTIONAL: build the second KASAN kernel (for lesson C2 only)
 	$(RUN) harness/build-kasan-kernel.sh
+
+debug-kernel: image ## Build the lockdep+KCSAN debug kernel (one-time; Module D lessons D1/D2)
+	$(RUN) harness/build-debug-kernel.sh
 
 initramfs: image ## Build the base BusyBox initramfs
 	$(RUN) harness/build-initramfs.sh

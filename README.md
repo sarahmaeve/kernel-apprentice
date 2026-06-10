@@ -89,8 +89,9 @@ This is meant to be cloned and explored by others, so it's built to be portable:
 
 ## Status
 
-Well past the Phase 1 vertical slice (DESIGN §9): **16 lessons and three Wheel
+Well past the Phase 1 vertical slice (DESIGN §9): **19 lessons and four Wheel
 scenarios** are built across modules A (the boundary), B (the full tracing
-track), C (memory), E (oops anatomy + the oops-fix), G (the modification
-capstone) and H (live-kernel gdb + SysRq). The module map, build order, and what
-comes next live in [POTENTIAL-CURRICULUM.md](POTENTIAL-CURRICULUM.md).
+track), C (memory), D (locking, races & hangs), E (oops anatomy + the oops-fix),
+G (the modification capstone) and H (live-kernel gdb + SysRq). The module map,
+build order, and what comes next live in
+[POTENTIAL-CURRICULUM.md](POTENTIAL-CURRICULUM.md).
